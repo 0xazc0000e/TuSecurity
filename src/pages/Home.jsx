@@ -41,7 +41,7 @@ export default function Home() {
                             </span>
                             <TypewriterText text="البيئة التعليمية الآمنة..." />
                         </div>
-                        <h1 className="text-5xl md:text-8xl font-black tracking-tight text-white mb-8 leading-[1.2]">
+                        <h1 className="text-3xl md:text-6xl font-black tracking-tight text-white mb-8 leading-[1.6]">
                             التدريب السيبراني <br />
                             <span className="text-transparent bg-clip-text bg-gradient-to-l from-[#7112AF] via-[#b66dff] to-[#7112AF] bg-[200%_auto] animate-gradient">الإدراكي</span>
                         </h1>

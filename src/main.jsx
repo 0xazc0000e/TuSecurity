@@ -8,9 +8,7 @@ import { AnalyticsProvider } from './context/AnalyticsContext.jsx'
 ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
         <ErrorBoundary>
-            <AnalyticsProvider>
-                <App />
-            </AnalyticsProvider>
+            <App />
         </ErrorBoundary>
     </React.StrictMode>,
 )

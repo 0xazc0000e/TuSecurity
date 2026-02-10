@@ -1,0 +1,282 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Kufi+Arabic:wght@100;200;300;400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* TuSecurity Brand Colors */
+  --tu-primary: #240993;
+  --tu-secondary: #330B99;
+  --tu-accent: #430D9E;
+  --tu-purple: #520EA4;
+  --tu-magenta: #6210A9;
+  --tu-pink: #7112AF;
+  
+  /* Extended Palette */
+  --tu-dark: #0a0a0f;
+  --tu-darker: #050508;
+  --tu-card: #111118;
+  --tu-border: #24099340;
+  --tu-glow: #430D9E80;
+  
+  /* Terminal Colors */
+  --term-green: #00ff88;
+  --term-cyan: #00d4ff;
+  --term-yellow: #ffd700;
+  --term-red: #ff4444;
+  --term-white: #e0e0e0;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  html {
+    scroll-behavior: smooth;
+  }
+  
+  body {
+    @apply bg-[#0a0a0f] text-white antialiased;
+    font-family: 'Noto Kufi Arabic', sans-serif;
+  }
+}
+
+@layer components {
+  /* Cyberpunk Grid Background */
+  .cyber-grid {
+    background-image: 
+      linear-gradient(rgba(36, 9, 147, 0.1) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(36, 9, 147, 0.1) 1px, transparent 1px);
+    background-size: 50px 50px;
+  }
+  
+  /* Glowing Effects */
+  .glow-primary {
+    box-shadow: 0 0 20px rgba(36, 9, 147, 0.5),
+                0 0 40px rgba(67, 13, 158, 0.3);
+  }
+  
+  .glow-text {
+    text-shadow: 0 0 10px rgba(67, 13, 158, 0.8),
+                 0 0 20px rgba(36, 9, 147, 0.6);
+  }
+  
+  .glow-border {
+    border: 1px solid rgba(67, 13, 158, 0.5);
+    box-shadow: 0 0 15px rgba(67, 13, 158, 0.3),
+                inset 0 0 15px rgba(67, 13, 158, 0.1);
+  }
+  
+  /* Terminal Styles */
+  .terminal {
+    font-family: 'JetBrains Mono', monospace;
+    background: linear-gradient(180deg, #0d0d12 0%, #08080a 100%);
+    border: 1px solid rgba(0, 255, 136, 0.2);
+    box-shadow: 
+      0 0 20px rgba(0, 255, 136, 0.1),
+      inset 0 0 60px rgba(0, 0, 0, 0.5);
+  }
+  
+  .terminal-text {
+    font-family: 'JetBrains Mono', monospace;
+  }
+  
+  /* Glass Morphism */
+  .glass {
+    background: rgba(17, 17, 24, 0.8);
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(67, 13, 158, 0.3);
+  }
+  
+  .glass-strong {
+    background: rgba(17, 17, 24, 0.95);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(67, 13, 158, 0.4);
+  }
+  
+  /* Animated Gradient Border */
+  .gradient-border {
+    position: relative;
+    background: #111118;
+    border-radius: 12px;
+  }
+  
+  .gradient-border::before {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: 14px;
+    background: linear-gradient(45deg, #240993, #430D9E, #6210A9, #7112AF, #240993);
+    background-size: 300% 300%;
+    animation: gradient-rotate 4s linear infinite;
+    z-index: -1;
+  }
+  
+  @keyframes gradient-rotate {
+    0% { background-position: 0% 50%; }
+    50% { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+  
+  /* Pulse Animation */
+  .pulse-glow {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+  
+  @keyframes pulse-glow {
+    0%, 100% { 
+      box-shadow: 0 0 20px rgba(67, 13, 158, 0.4);
+    }
+    50% { 
+      box-shadow: 0 0 40px rgba(67, 13, 158, 0.8);
+    }
+  }
+  
+  /* Scan Line Effect */
+  .scan-line {
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .scan-line::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, transparent, rgba(0, 255, 136, 0.5), transparent);
+    animation: scan 3s linear infinite;
+  }
+  
+  @keyframes scan {
+    0% { transform: translateY(-100%); }
+    100% { transform: translateY(100vh); }
+  }
+  
+  /* Progress Bar Animation */
+  .progress-animate {
+    background: linear-gradient(90deg, #240993, #430D9E, #6210A9);
+    background-size: 200% 100%;
+    animation: progress-shine 2s linear infinite;
+  }
+  
+  @keyframes progress-shine {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+  
+  /* Floating Animation */
+  .float {
+    animation: float 3s ease-in-out infinite;
+  }
+  
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+  
+  /* Typewriter Effect */
+  .typewriter {
+    overflow: hidden;
+    white-space: nowrap;
+    animation: typing 3s steps(40, end);
+  }
+  
+  @keyframes typing {
+    from { width: 0; }
+    to { width: 100%; }
+  }
+  
+  /* Success/Error States */
+  .success-glow {
+    box-shadow: 0 0 20px rgba(0, 255, 136, 0.5);
+    border-color: rgba(0, 255, 136, 0.5);
+  }
+  
+  .error-glow {
+    box-shadow: 0 0 20px rgba(255, 68, 68, 0.5);
+    border-color: rgba(255, 68, 68, 0.5);
+  }
+  
+  /* Level Badge */
+  .level-badge {
+    background: linear-gradient(135deg, #240993, #430D9E);
+    clip-path: polygon(10% 0, 100% 0, 90% 100%, 0% 100%);
+  }
+  
+  /* Mission Card */
+  .mission-card {
+    background: linear-gradient(145deg, rgba(17, 17, 24, 0.9), rgba(10, 10, 15, 0.9));
+    border: 1px solid rgba(67, 13, 158, 0.3);
+    transition: all 0.3s ease;
+  }
+  
+  .mission-card:hover {
+    border-color: rgba(67, 13, 158, 0.6);
+    box-shadow: 0 0 30px rgba(67, 13, 158, 0.2);
+    transform: translateY(-2px);
+  }
+  
+  /* Button Styles */
+  .btn-cyber {
+    background: linear-gradient(135deg, #240993, #430D9E);
+    border: none;
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s ease;
+  }
+  
+  .btn-cyber::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    transition: left 0.5s ease;
+  }
+  
+  .btn-cyber:hover::before {
+    left: 100%;
+  }
+  
+  .btn-cyber:hover {
+    box-shadow: 0 0 25px rgba(67, 13, 158, 0.6);
+    transform: translateY(-2px);
+  }
+  
+  /* Scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: #0a0a0f;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #240993, #430D9E);
+    border-radius: 4px;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #330B99, #520EA4);
+  }
+}
+
+/* RTL Support */
+[dir="rtl"] {
+  direction: rtl;
+}
+
+/* Selection */
+::selection {
+  background: rgba(67, 13, 158, 0.5);
+  color: white;
+}

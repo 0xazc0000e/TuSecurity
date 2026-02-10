@@ -1,0 +1,297 @@
+// API Service for CyberClub Frontend
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+
+// Helper function for API calls
+async function apiCall(endpoint, options = {}) {
+    const url = `${API_BASE_URL}${endpoint}`;
+    
+    const config = {
+        headers: {
+            'Content-Type': 'application/json',
+            ...options.headers
+        },
+        ...options
+    };
+
+    // Add auth token if available
+    const token = localStorage.getItem('token');
+    if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+    }
+
+    try {
+        const response = await fetch(url, config);
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'API request failed');
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error('API Error:', error);
+        throw error;
+    }
+}
+
+// Auth API
+export const authAPI = {
+    login: (email, password) => apiCall('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email, password })
+    }),
+    
+    register: (email, password, name) => apiCall('/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({ email, password, name })
+    }),
+    
+    logout: () => {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+    }
+};
+
+// Admin API
+export const adminAPI = {
+    // Dashboard Stats
+    getStats: () => apiCall('/admin/stats'),
+    
+    // Users Management
+    getUsers: (params = {}) => {
+        const queryString = new URLSearchParams(params).toString();
+        return apiCall(`/admin/users?${queryString}`);
+    },
+    
+    updateUser: (id, data) => apiCall(`/admin/users/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data)
+    }),
+    
+    deleteUser: (id) => apiCall(`/admin/users/${id}`, {
+        method: 'DELETE'
+    }),
+    
+    // Simulators Management
+    getSimulators: () => apiCall('/admin/simulators'),
+    
+    createSimulator: (data) => apiCall('/admin/simulators', {
+        method: 'POST',
+        body: JSON.stringify(data)
+    }),
+    
+    updateSimulator: (id, data) => apiCall(`/admin/simulators/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data)
+    }),
+    
+    deleteSimulator: (id) => apiCall(`/admin/simulators/${id}`, {
+        method: 'DELETE'
+    }),
+    
+    // Content Management
+    getContent: (params = {}) => {
+        const queryString = new URLSearchParams(params).toString();
+        return apiCall(`/admin/content?${queryString}`);
+    },
+    
+    createContent: (data) => apiCall('/admin/content', {
+        method: 'POST',
+        body: JSON.stringify(data)
+    }),
+    
+    // System Logs
+    getLogs: (params = {}) => {
+        const queryString = new URLSearchParams(params).toString();
+        return apiCall(`/admin/logs?${queryString}`);
+    }
+};
+
+// Simulators API
+export const simulatorsAPI = {
+    getAll: () => apiCall('/simulators'),
+    
+    getById: (id) => apiCall(`/simulators/${id}`),
+    
+    saveProgress: (data) => apiCall('/progress', {
+        method: 'POST',
+        body: JSON.stringify(data)
+    })
+};
+
+// Content API
+export const contentAPI = {
+    getAll: (params = {}) => {
+        const queryString = new URLSearchParams(params).toString();
+        return apiCall(`/content?${queryString}`);
+    },
+    
+    getById: (id) => apiCall(`/content/${id}`)
+};
+
+// User Progress API
+export const progressAPI = {
+    getUserProgress: () => apiCall('/user/progress'),
+    
+    updateProgress: (simulatorId, lessonId, data) => apiCall('/progress', {
+        method: 'POST',
+        body: JSON.stringify({
+            simulator_id: simulatorId,
+            lesson_id: lessonId,
+            ...data
+        })
+    })
+};
+
+// Activity Tracking
+export const trackActivity = (action, metadata = {}) => {
+    // Fire and forget - don't wait for response
+    apiCall('/activity', {
+        method: 'POST',
+        body: JSON.stringify({ action, metadata })
+    }).catch(() => {
+        // Silently fail - activity tracking shouldn't break the app
+    });
+};
+
+// Real-time connection (WebSocket fallback to polling)
+export class RealtimeAPI {
+    constructor() {
+        this.subscribers = new Map();
+        this.pollingInterval = null;
+    }
+
+    subscribe(channel, callback) {
+        if (!this.subscribers.has(channel)) {
+            this.subscribers.set(channel, new Set());
+        }
+        this.subscribers.get(channel).add(callback);
+        
+        // Start polling if not already started
+        if (!this.pollingInterval) {
+            this.startPolling();
+        }
+    }
+
+    unsubscribe(channel, callback) {
+        if (this.subscribers.has(channel)) {
+            this.subscribers.get(channel).delete(callback);
+        }
+    }
+
+    startPolling() {
+        this.pollingInterval = setInterval(async () => {
+            // Poll for updates
+            try {
+                const stats = await adminAPI.getStats();
+                this.notify('stats', stats);
+            } catch (error) {
+                console.error('Polling error:', error);
+            }
+        }, 30000); // Every 30 seconds
+    }
+
+    notify(channel, data) {
+        if (this.subscribers.has(channel)) {
+            this.subscribers.get(channel).forEach(callback => {
+                try {
+                    callback(data);
+                } catch (error) {
+                    console.error('Subscriber error:', error);
+                }
+            });
+        }
+    }
+
+    disconnect() {
+        if (this.pollingInterval) {
+            clearInterval(this.pollingInterval);
+            this.pollingInterval = null;
+        }
+    }
+}
+
+// File Upload Helper
+export const uploadFile = async (file, onProgress) => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const token = localStorage.getItem('token');
+    
+    return new Promise((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        
+        xhr.upload.addEventListener('progress', (event) => {
+            if (event.lengthComputable && onProgress) {
+                const progress = (event.loaded / event.total) * 100;
+                onProgress(progress);
+            }
+        });
+
+        xhr.addEventListener('load', () => {
+            if (xhr.status === 200) {
+                resolve(JSON.parse(xhr.response));
+            } else {
+                reject(new Error('Upload failed'));
+            }
+        });
+
+        xhr.addEventListener('error', () => {
+            reject(new Error('Upload failed'));
+        });
+
+        xhr.open('POST', `${API_BASE_URL}/upload`);
+        if (token) {
+            xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+        }
+        xhr.send(formData);
+    });
+};
+
+// Cache Manager
+export class APICache {
+    constructor(ttl = 5 * 60 * 1000) { // 5 minutes default
+        this.cache = new Map();
+        this.ttl = ttl;
+    }
+
+    get(key) {
+        const item = this.cache.get(key);
+        if (!item) return null;
+        
+        if (Date.now() - item.timestamp > this.ttl) {
+            this.cache.delete(key);
+            return null;
+        }
+        
+        return item.data;
+    }
+
+    set(key, data) {
+        this.cache.set(key, {
+            data,
+            timestamp: Date.now()
+        });
+    }
+
+    invalidate(key) {
+        this.cache.delete(key);
+    }
+
+    clear() {
+        this.cache.clear();
+    }
+}
+
+// Export default api object
+export default {
+    auth: authAPI,
+    admin: adminAPI,
+    simulators: simulatorsAPI,
+    content: contentAPI,
+    progress: progressAPI,
+    trackActivity,
+    uploadFile,
+    RealtimeAPI,
+    APICache
+};

@@ -6,7 +6,7 @@ import { NavLink } from '../components/ui/NavLink';
 const SECTIONS = [
     { id: 'home', label: 'الرئيسية', path: '/' },
     { id: 'simulators', label: 'المحاكيات', path: '/simulators' },
-    { id: 'attacks', label: 'مكتبة التهديدات', path: '/attacks' },
+    { id: 'activities', label: 'فعاليات النادي', path: '/activities' },
     { id: 'articles', label: 'قاعدة المعرفة', path: '/articles' },
     { id: 'news', label: 'الأخبار', path: '/news' },
 ];

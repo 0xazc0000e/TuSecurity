@@ -1,20 +1,36 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { User, Hash, Briefcase, PlusCircle } from 'lucide-react';
+import { User, Hash, Briefcase, PlusCircle, Shield, Sword, Search } from 'lucide-react';
+import { useAnalytics } from '../../context/AnalyticsContext';
 
 export const IdentitySection = () => {
+    const { cognitiveLayers, ethicalTendency, userMeta } = useAnalytics();
+
+    // Calculate Rank / Archetype based on skills
+    const archetype = useMemo(() => {
+        const osOp = cognitiveLayers.os.operational;
+        const netCon = cognitiveLayers.network.conceptual;
+        const ethical = ethicalTendency.score;
+
+        if (osOp > 60 && netCon > 60) return { title: 'مهندس نظم (System Architect)', icon: <Shield size={64} className="text-[#7112AF]" /> };
+        if (osOp > 30) return { title: 'مستكشف رقمي (Digital Explorer)', icon: <Search size={64} className="text-blue-400" /> };
+        if (ethical < -30) return { title: 'مهاجم صاعد (Red Teamer)', icon: <Sword size={64} className="text-red-400" /> };
+
+        return { title: 'مبتدئ طموح (Aspiring Guardian)', icon: <User size={64} className="text-slate-400" /> };
+    }, [cognitiveLayers, ethicalTendency]);
+
     return (
         <div className="bg-[#0f0f16]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-8 mb-8 flex flex-col md:flex-row items-center gap-8 text-right md:text-right relative overflow-hidden">
             {/* Background Decoration */}
             <div className="absolute top-0 right-0 w-full h-full bg-gradient-to-l from-[#7112AF]/10 to-transparent opacity-50 pointer-events-none" />
 
             <div className="w-32 h-32 rounded-full border-4 border-[#7112AF] bg-[#050214] flex items-center justify-center relative z-10 shadow-[0_0_30px_rgba(113,18,175,0.3)]">
-                <User size={64} className="text-[#7112AF]" />
+                {archetype.icon}
                 <div className="absolute bottom-1 right-1 bg-green-500 w-6 h-6 rounded-full border-4 border-[#050214]" />
             </div>
 
             <div className="flex-1 relative z-10 w-full text-center md:text-right">
-                <h1 className="text-3xl font-bold text-white mb-2">الطالب الجامعي</h1>
+                <h1 className="text-3xl font-bold text-white mb-2">{archetype.title}</h1>
                 <p className="text-slate-400 font-mono mb-6 text-sm">s44123456@students.tu.edu.sa</p>
 
                 <div className="flex flex-col md:flex-row items-center md:items-start gap-4">
@@ -23,7 +39,7 @@ export const IdentitySection = () => {
                         <Briefcase size={16} className="text-[#d4b3ff]" />
                         <div>
                             <span className="block text-[10px] text-[#d4b3ff]/70 font-bold uppercase">المجال المفضل</span>
-                            <span className="text-[#d4b3ff] text-sm font-bold">Blue Teaming & Defense</span>
+                            <span className="text-[#d4b3ff] text-sm font-bold">{userMeta.focusArea === 'defense' ? 'Blue Teaming & Defense' : 'Digital Forensics'}</span>
                         </div>
                     </div>
 

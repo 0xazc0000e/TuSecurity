@@ -1,15 +1,23 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Shield, Sword, RefreshCcw } from 'lucide-react';
+import { useAnalytics } from '../../context/AnalyticsContext';
 
 export const EthicalIndicator = () => {
-    // Mock score: > 0 means Defense leaning, < 0 means Offense leaning
-    const balanceScore = 20; // Scale from -100 (Full Offense) to 100 (Full Defense)
+    const { ethicalTendency } = useAnalytics();
+    const balanceScore = ethicalTendency?.score || 0;
+
+    // Helper for message
+    const getMessage = () => {
+        if (balanceScore > 30) return 'ميلك هذا الأسبوع دفاعي قوي. أنت تبني الحصون.';
+        if (balanceScore < -30) return 'ميلك هذا الأسبوع هجومي. تذكر، القوة تتطلب مسؤولية.';
+        return 'أنت متوازن هذا الأسبوع. تجمع بين فهم الهجوم وإستراتيجيات الدفاع.';
+    };
 
     return (
         <div className="bg-[#0f0f16]/60 backdrop-blur-md rounded-2xl border border-white/5 p-6 h-full flex flex-col justify-center">
             <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2">
-                المؤشر الأخلاقي <RefreshCcw size={20} className="text-[#7112AF]" />
+                المؤشر الأخلاقي (Weekly Tendency) <RefreshCcw size={20} className="text-[#7112AF]" />
             </h3>
 
             <div className="relative pt-6 pb-2">
@@ -48,10 +56,7 @@ export const EthicalIndicator = () => {
                     <span className="font-bold block mb-1 text-white">
                         {balanceScore >= 0 ? 'عقلية الحامي (Guardian Mindset)' : 'عقلية المهاجم (Hunter Mindset)'}
                     </span>
-                    {balanceScore >= 0
-                        ? 'أنت تركز على بناء الأنظمة وتحصينها. تذكر أن فهم الهجوم ضروري لتقوية الدفاع.'
-                        : 'معرفتك الهجومية قوية. احرص على موازنتها بمهارات التحصين والاستجابة للحوادث لتبقى في الجانب الأخلاقي.'
-                    }
+                    {getMessage()}
                 </p>
             </div>
         </div>

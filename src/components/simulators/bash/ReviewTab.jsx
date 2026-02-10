@@ -1,9 +1,20 @@
 import React, { useState } from 'react';
+import { useAnalytics } from '../../../context/AnalyticsContext';
 import { CheckCircle, Award, RefreshCcw } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export const ReviewTab = () => {
-    const [rating] = useState("فهم تشغيلي جيد"); // Static for this version, could be dynamic based on errors
+    const { logEvent } = useAnalytics();
+    const [rating] = useState("فهم تشغيلي جيد");
+    const [saved, setSaved] = useState(false);
+
+    const handleReflection = (answer) => {
+        logEvent('REFLECTION_ANSWERED', {
+            question: 'إنشاء 100 مجلد: ماوس أم طرفية؟',
+            answer: answer === 'mouse' ? 'الماوس أسرع (وجهة نظر بصرية)' : 'الطرفية أسرع (وجهة نظر برمجية)'
+        });
+        setSaved(true);
+    };
 
     return (
         <div className="flex flex-col items-center justify-center h-full p-8 font-cairo text-center">
@@ -61,9 +72,24 @@ export const ReviewTab = () => {
                     برأيك، إذا كنت تريد إنشاء 100 مجلد بأسماء مختلفة، هل سيكون استخدام الماوس أسرع، أم كتابة أمر واحد في الطرفية؟
                 </p>
                 <div className="flex gap-2">
-                    <button className="flex-1 py-2 bg-black/30 rounded text-slate-400 text-xs hover:bg-[#7112AF]/20 hover:text-white transition-colors">الماوس أسرع</button>
-                    <button className="flex-1 py-2 bg-black/30 rounded text-slate-400 text-xs hover:bg-[#7112AF]/20 hover:text-white transition-colors">الطرفية أسرع</button>
+                    <button
+                        onClick={() => handleReflection('mouse')}
+                        className="flex-1 py-2 bg-black/30 rounded text-slate-400 text-xs hover:bg-[#7112AF]/20 hover:text-white transition-colors focus:ring-2 focus:ring-[#7112AF]"
+                    >
+                        الماوس أسرع
+                    </button>
+                    <button
+                        onClick={() => handleReflection('terminal')}
+                        className="flex-1 py-2 bg-black/30 rounded text-slate-400 text-xs hover:bg-[#7112AF]/20 hover:text-white transition-colors focus:ring-2 focus:ring-[#7112AF]"
+                    >
+                        الطرفية أسرع
+                    </button>
                 </div>
+                {saved && (
+                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="mt-2 text-green-400 text-xs flex items-center justify-center gap-1">
+                        <CheckCircle size={12} /> تم الحفظ في دفتر التفكير
+                    </motion.div>
+                )}
             </motion.div>
 
             <div className="mt-8">

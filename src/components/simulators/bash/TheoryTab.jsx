@@ -1,140 +1,419 @@
 import React, { useState } from 'react';
-import { ArrowLeft, Terminal, MousePointer2, Map, Hammer, ShieldAlert, ChevronDown, ChevronUp } from 'lucide-react';
+import {
+    ArrowLeft, Terminal, BookOpen, Lightbulb, Code, Zap, Shield,
+    TrendingUp, Award, Clock, Target, User, Map as MapIcon,
+    Search, AlertTriangle, CheckCircle, Info, Sparkles,
+    ChevronDown, ChevronUp
+} from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { BASH_MODULES } from '../../../data/bashModules';
+import { MODULE_SUMMARY } from '../../../data/bashModulesExtended';
+import { MermaidDiagram } from './MermaidDiagram';
 
-export const TheoryTab = ({ onNext }) => {
-    const [activeSection, setActiveSection] = useState(0);
 
-    const sections = [
-        {
-            title: "المستوى 1: الاستكشاف (The Explorer)",
-            icon: <Map className="text-blue-400" />,
-            content: (
-                <div className="space-y-4 text-slate-300 leading-relaxed">
-                    <p>في هذا المستوى، ستتعلم كيف تكون "العيون" التي ترى كل شيء في النظام. الهاكر المحترف لا يلمس شيئاً قبل أن يفهم أين هو وماذا يوجد حوله.</p>
-                    <ul className="list-disc list-inside space-y-2 text-sm text-slate-400">
-                        <li><strong className="text-white">whoami</strong>: لتعرف هويتك وصلاحياتك.</li>
-                        <li><strong className="text-white">pwd</strong>: لتعرف موقعك الحالي في الخريطة.</li>
-                        <li><strong className="text-white">ls</strong>: لكشف الملفات والمجلدات المخفية والظاهرة.</li>
-                        <li><strong className="text-white">cd</strong>: للانتقال بين الغرف (المجلدات) المختلفة.</li>
-                    </ul>
-                </div>
-            )
-        },
-        {
-            title: "المستوى 2: البناء (The Builder)",
-            icon: <Hammer className="text-emerald-400" />,
-            content: (
-                <div className="space-y-4 text-slate-300 leading-relaxed">
-                    <p>بعد أن جمعت المعلومات، حان وقت العمل. في هذا المستوى ستتعلم كيف تشكل النظام الرقمي بيديك.</p>
-                    <ul className="list-disc list-inside space-y-2 text-sm text-slate-400">
-                        <li><strong className="text-white">mkdir</strong>: لبناء قواعد (مجلدات) جديدة.</li>
-                        <li><strong className="text-white">touch</strong>: لإنشاء ملفات جديدة من العدم.</li>
-                        <li><strong className="text-white">cp</strong>: لاستنساخ البيانات المهمة قبل التعديل عليها.</li>
-                        <li><strong className="text-white">mv</strong>: لنقل الملفات أو إعادة تسميتها لإخفائها.</li>
-                    </ul>
-                </div>
-            )
-        },
-        {
-            title: "المستوى 3: الإدارة (The Admin)",
-            icon: <ShieldAlert className="text-red-400" />,
-            content: (
-                <div className="space-y-4 text-slate-300 leading-relaxed">
-                    <p>القوة العظمى تتطلب حذراً شديداً. هنا ستتعامل مع أدوات قوية يمكنها تدمير البيانات أو كشف أدق الأسرار.</p>
-                    <ul className="list-disc list-inside space-y-2 text-sm text-slate-400">
-                        <li><strong className="text-white">grep</strong>: "إبرة في كومة قش". يبحث عن كلمة محددة داخل آلاف الملفات.</li>
-                        <li><strong className="text-white">rm</strong>: الممحاة النهائية. يحذف الملفات بلا رجعة.</li>
-                        <li><strong className="text-white">clear</strong>: لتنظيف أثرك وترتيب أفكارك.</li>
-                    </ul>
-                </div>
-            )
+// Icon mapping for emojis
+const iconMap = {
+    '🎯': <Target className="inline w-5 h-5" />,
+    '💼': <User className="inline w-5 h-5" />,
+    '🎭': <Sparkles className="inline w-5 h-5" />,
+    '🗺️': <MapIcon className="inline w-5 h-5" />,
+    '👀': <Search className="inline w-5 h-5" />,
+    '🚪': <ArrowLeft className="inline w-5 h-5" />,
+    '📍': <MapIcon className="inline w-5 h-5" />,
+    '💡': <Lightbulb className="inline w-5 h-5 text-amber-400" />,
+    '🔍': <Search className="inline w-5 h-5" />,
+    '⚡': <Zap className="inline w-5 h-5 text-yellow-400" />,
+    '⚠️': <AlertTriangle className="inline w-5 h-5 text-red-400" />,
+    '✅': <CheckCircle className="inline w-5 h-5 text-green-400" />,
+    '🔒': <Shield className="inline w-5 h-5" />,
+    '🏗️': <Code className="inline w-5 h-5" />,
+    '📄': <BookOpen className="inline w-5 h-5" />,
+    '📋': <BookOpen className="inline w-5 h-5" />,
+    '🚚': <ArrowLeft className="inline w-5 h-5" />,
+    '🔥': <AlertTriangle className="inline w-5 h-5 text-red-500" />,
+    '📖': <BookOpen className="inline w-5 h-5 text-blue-400" />,
+    '🌍': <Target className="inline w-5 h-5 text-green-400" />,
+};
+
+// Replace emoji with icons
+const replaceEmojisWithIcons = (text) => {
+    if (!text) return text;
+
+    const parts = [];
+    let lastIndex = 0;
+    const emojiRegex = /(🎯|💼|🎭|🗺️|👀|🚪|📍|💡|🔍|⚡|⚠️|✅|🔒|🏗️|📄|📋|🚚|🔥|📖|🌍)/g;
+
+    let match;
+    while ((match = emojiRegex.exec(text)) !== null) {
+        if (match.index > lastIndex) {
+            parts.push(text.substring(lastIndex, match.index));
         }
-    ];
+        parts.push(iconMap[match[0]] || match[0]);
+        lastIndex = match.index + match[0].length;
+    }
+
+    if (lastIndex < text.length) {
+        parts.push(text.substring(lastIndex));
+    }
+
+    return parts.length > 0 ? parts : text;
+};
+
+export const TheoryTab = ({ onNext, currentModuleId = 'module-1' }) => {
+    const [activeSection, setActiveSection] = useState(null);
+
+    const currentModule = BASH_MODULES.find(m => m.id === currentModuleId) || BASH_MODULES[0];
 
     return (
-        <div className="flex flex-col h-full overflow-y-auto custom-scrollbar p-6 md:p-8 font-cairo">
-            <div className="max-w-4xl mx-auto w-full">
+        <div className="flex flex-col h-full overflow-y-auto custom-scrollbar p-6 md:p-8 font-cairo bg-gradient-to-br from-[#0a0a0a] via-[#0c0c0c] to-[#0a0a0a]">
+            <div className="max-w-5xl mx-auto w-full">
 
-                {/* Intro Header */}
+                {/* Hero Header */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="text-center mb-10"
+                    className="text-center mb-10 relative"
                 >
-                    <h2 className="text-3xl font-bold text-white mb-4">رحلتك لاحتراف سطر الأوامر</h2>
-                    <p className="text-lg text-slate-400 leading-relaxed">
-                        ستنتقل عبر ثلاثة مستويات تدريبية، مصممة لتحويلك من مبتدئ إلى مستخدم واثق.
-                    </p>
+                    <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-64 bg-[#7112AF] opacity-10 blur-[100px] rounded-full"></div>
+
+                    <div className="relative z-10">
+                        <div className="inline-block px-4 py-1.5 rounded-full bg-[#7112AF]/10 border border-[#7112AF]/30 text-[#7112AF] text-sm font-bold mb-4">
+                            {currentModule.subtitle}
+                        </div>
+                        <h2 className="text-4xl font-bold text-white mb-4">{currentModule.title}</h2>
+                        <p className="text-lg text-slate-400 leading-relaxed max-w-2xl mx-auto">
+                            {currentModule.description}
+                        </p>
+
+                        {/* Stats Bar */}
+                        <div className="flex items-center justify-center gap-6 mt-6 text-sm flex-wrap">
+                            <div className="flex items-center gap-2">
+                                <div className="p-2 bg-blue-500/10 rounded-lg">
+                                    <TrendingUp size={16} className="text-blue-400" />
+                                </div>
+                                <span className="text-slate-300">
+                                    <span className="text-blue-400 font-bold">{currentModule.difficulty}</span>
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="p-2 bg-purple-500/10 rounded-lg">
+                                    <Award size={16} className="text-purple-400" />
+                                </div>
+                                <span className="text-slate-300">
+                                    <span className="text-purple-400 font-bold">{currentModule.xp} XP</span>
+                                </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <div className="p-2 bg-emerald-500/10 rounded-lg">
+                                    <Clock size={16} className="text-emerald-400" />
+                                </div>
+                                <span className="text-slate-300">
+                                    <span className="text-emerald-400 font-bold">{currentModule.estimatedTime}</span>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
                 </motion.div>
 
-                {/* GUI vs CLI Comparison */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
-                    <div className="bg-[#1a1a1a] p-5 rounded-2xl border border-white/5 flex flex-col items-center text-center">
-                        <div className="bg-blue-500/10 p-3 rounded-full text-blue-400 mb-3"><MousePointer2 size={24} /></div>
-                        <h3 className="font-bold text-white mb-1">الواجهة الرسومية (GUI)</h3>
-                        <p className="text-xs text-slate-400">سهلة ولكنها محدودة وبطيئة للمحترفين.</p>
-                    </div>
-                    <div className="bg-[#1a1a1a] p-5 rounded-2xl border border-[#7112AF]/30 flex flex-col items-center text-center relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-16 h-16 bg-[#7112AF] blur-[40px] opacity-20"></div>
-                        <div className="bg-[#7112AF]/10 p-3 rounded-full text-[#7112AF] mb-3"><Terminal size={24} /></div>
-                        <h3 className="font-bold text-white mb-1">سطر الأوامر (CLI)</h3>
-                        <p className="text-xs text-slate-400">قوة مطلقة، سرعة، وتحكم كامل.</p>
-                    </div>
-                </div>
-
-                {/* Accordion Learning Path */}
-                <div className="space-y-4 mb-12">
-                    {sections.map((section, index) => (
-                        <motion.div
-                            key={index}
-                            initial={{ opacity: 0, x: -10 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: index * 0.1 + 0.3 }}
-                            className="bg-[#151515] border border-white/5 rounded-xl overflow-hidden"
-                        >
-                            <button
-                                onClick={() => setActiveSection(activeSection === index ? -1 : index)}
-                                className="w-full flex items-center justify-between p-4 hover:bg-white/5 transition-colors"
-                            >
-                                <div className="flex items-center gap-4">
-                                    <div className="p-2 bg-black/30 rounded-lg">{section.icon}</div>
-                                    <div className="text-right">
-                                        <h3 className="font-bold text-white text-lg">{section.title}</h3>
-                                    </div>
+                {/* Story Introduction */}
+                {currentModule.story && (
+                    <motion.div
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.2 }}
+                        className="mb-8"
+                    >
+                        <div className="bg-gradient-to-r from-amber-500/10 to-orange-500/10 border border-amber-500/20 rounded-2xl p-6">
+                            <div className="flex items-start gap-4">
+                                <div className="p-3 bg-amber-500/20 rounded-xl">
+                                    <BookOpen size={24} className="text-amber-400" />
                                 </div>
-                                {activeSection === index ? <ChevronUp className="text-slate-500" /> : <ChevronDown className="text-slate-500" />}
-                            </button>
-                            <AnimatePresence>
-                                {activeSection === index && (
-                                    <motion.div
-                                        initial={{ height: 0, opacity: 0 }}
-                                        animate={{ height: 'auto', opacity: 1 }}
-                                        exit={{ height: 0, opacity: 0 }}
-                                        className="overflow-hidden"
-                                    >
-                                        <div className="p-4 pt-0 border-t border-white/5 bg-black/20">
-                                            {section.content}
+                                <div className="flex-1">
+                                    <h3 className="text-xl font-bold text-white mb-3 flex items-center gap-2">
+                                        <Target className="text-amber-400" size={20} />
+                                        السيناريو التعليمي
+                                    </h3>
+                                    <div className="prose prose-invert max-w-none">
+                                        <ReactMarkdown
+                                            remarkPlugins={[remarkGfm]}
+                                            components={{
+                                                p: ({ node, ...props }) => <p className="mb-3" {...props} />,
+                                                strong: ({ node, ...props }) => <strong className="text-white font-bold" {...props} />,
+                                                code: ({ node, ...props }) => <code className="px-2 py-0.5 bg-black/50 text-emerald-400 rounded font-mono text-sm" {...props} />
+                                            }}
+                                        >
+                                            {currentModule.story.intro}
+                                        </ReactMarkdown>
+                                    </div>
+                                    {currentModule.story.context && (
+                                        <div className="mt-4 pt-4 border-t border-amber-500/20">
+                                            <p className="text-amber-200/80 text-sm italic flex items-center gap-2">
+                                                <Lightbulb size={16} className="text-amber-400" />
+                                                {currentModule.story.context}
+                                            </p>
                                         </div>
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-                        </motion.div>
-                    ))}
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+
+                {/* Theory Overview */}
+                {currentModule.theory?.overview && (
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.3 }}
+                        className="mb-8"
+                    >
+                        <div className="bg-[#151515] border border-white/5 rounded-2xl p-6">
+                            <div className="flex items-center gap-3 mb-4">
+                                <div className="p-2 bg-[#7112AF]/20 rounded-lg">
+                                    <Lightbulb size={20} className="text-[#7112AF]" />
+                                </div>
+                                <h3 className="text-2xl font-bold text-white">المفاهيم الأساسية</h3>
+                            </div>
+
+                            <div className="prose prose-invert prose-lg max-w-none">
+                                <ReactMarkdown
+                                    remarkPlugins={[remarkGfm]}
+                                    components={{
+                                        h2: ({ node, ...props }) => <h2 className="text-2xl font-bold text-white mt-8 mb-4" {...props} />,
+                                        h3: ({ node, ...props }) => <h3 className="text-xl font-bold text-white mt-6 mb-3" {...props} />,
+                                        p: ({ node, ...props }) => <p className="mb-4 leading-relaxed text-slate-300" {...props} />,
+                                        strong: ({ node, ...props }) => <strong className="text-white font-bold" {...props} />,
+                                        code: ({ node, inline, ...props }) =>
+                                            inline
+                                                ? <code className="px-2 py-1 bg-black/50 text-emerald-400 rounded font-mono text-sm" {...props} />
+                                                : <code className="block p-4 bg-black/50 text-emerald-400 rounded-lg font-mono text-sm my-4" {...props} />,
+                                        table: ({ node, ...props }) => <table className="w-full border-collapse my-6" {...props} />,
+                                        th: ({ node, ...props }) => <th className="border border-white/10 px-4 py-2 bg-[#7112AF]/20 text-white font-bold text-right" {...props} />,
+                                        td: ({ node, ...props }) => <td className="border border-white/10 px-4 py-2 text-slate-300" {...props} />,
+                                        blockquote: ({ node, ...props }) => <blockquote className="border-r-4 border-[#7112AF] pr-4 py-2 bg-[#7112AF]/5 rounded my-4 italic text-slate-400" {...props} />
+                                    }}
+                                >
+                                    {currentModule.theory.overview}
+                                </ReactMarkdown>
+                            </div>
+                        </div>
+                    </motion.div>
+                )}
+
+                {/* Key Commands - Accordion Style */}
+                {currentModule.theory?.keyCommands && (
+                    <div className="space-y-4 mb-8">
+                        <h3 className="text-2xl font-bold text-white flex items-center gap-3">
+                            <Terminal className="text-[#7112AF]" size={24} />
+                            الأوامر الأساسية
+                        </h3>
+
+                        {currentModule.theory.keyCommands.map((cmd, index) => (
+                            <motion.div
+                                key={cmd.command}
+                                initial={{ opacity: 0, x: -10 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={{ delay: 0.4 + index * 0.1 }}
+                                className={`bg-[#151515] border rounded-2xl overflow-hidden transition-all ${cmd.danger ? 'border-red-500/30 shadow-lg shadow-red-500/10' : 'border-white/5'
+                                    }`}
+                            >
+                                {/* Command Header */}
+                                <button
+                                    onClick={() => setActiveSection(activeSection === cmd.command ? null : cmd.command)}
+                                    className="w-full flex items-center justify-between p-5 hover:bg-white/5 transition-colors"
+                                >
+                                    <div className="flex items-center gap-4">
+                                        <div className={`p-3 rounded-xl font-mono font-bold text-lg ${cmd.danger
+                                            ? 'bg-red-500/20 text-red-400 border border-red-500/30'
+                                            : 'bg-[#7112AF]/20 text-[#7112AF] border border-[#7112AF]/30'
+                                            }`}>
+                                            {cmd.command}
+                                        </div>
+                                        <div className="text-right">
+                                            <h4 className="font-bold text-white text-lg">{cmd.fullName}</h4>
+                                            <p className="text-sm text-slate-400">{cmd.purpose}</p>
+                                        </div>
+                                    </div>
+                                    <ChevronDown
+                                        className={`w-5 h-5 text-slate-500 transition-transform ${activeSection === cmd.command ? 'rotate-180' : ''
+                                            }`}
+                                    />
+                                </button>
+
+                                {/* Command Details - Expandable */}
+                                <AnimatePresence>
+                                    {activeSection === cmd.command && (
+                                        <motion.div
+                                            initial={{ height: 0, opacity: 0 }}
+                                            animate={{ height: 'auto', opacity: 1 }}
+                                            exit={{ height: 0, opacity: 0 }}
+                                            className="overflow-hidden"
+                                        >
+                                            <div className="p-6 pt-0 space-y-6 bg-black/20">
+
+                                                {/* Analogy & Real World */}
+                                                <div className="grid md:grid-cols-2 gap-4">
+                                                    <div className="bg-blue-500/5 border border-blue-500/20 rounded-xl p-4">
+                                                        <p className="text-blue-400 text-sm font-bold mb-2 flex items-center gap-2">
+                                                            <BookOpen size={16} />
+                                                            التشبيه
+                                                        </p>
+                                                        <p className="text-slate-300 text-sm">{replaceEmojisWithIcons(cmd.analogy)}</p>
+                                                    </div>
+                                                    <div className="bg-green-500/5 border border-green-500/20 rounded-xl p-4">
+                                                        <p className="text-green-400 text-sm font-bold mb-2 flex items-center gap-2">
+                                                            <Target size={16} />
+                                                            في الواقع
+                                                        </p>
+                                                        <p className="text-slate-300 text-sm">{cmd.realWorld}</p>
+                                                    </div>
+                                                </div>
+
+                                                {/* Syntax */}
+                                                <div>
+                                                    <p className="text-slate-400 text-sm mb-2 flex items-center gap-2">
+                                                        <Code size={16} />
+                                                        الصيغة:
+                                                    </p>
+                                                    <code className="block bg-black/50 border border-white/10 rounded-lg p-3 text-emerald-400 font-mono text-sm">
+                                                        {cmd.syntax}
+                                                    </code>
+                                                </div>
+
+                                                {/* Examples */}
+                                                {cmd.examples && cmd.examples.length > 0 && (
+                                                    <div>
+                                                        <p className="text-white font-bold mb-3 flex items-center gap-2">
+                                                            <Lightbulb className="text-amber-400" size={18} />
+                                                            أمثلة عملية:
+                                                        </p>
+                                                        <div className="space-y-3">
+                                                            {cmd.examples.map((ex, i) => (
+                                                                <div key={i} className="bg-black/30 rounded-lg p-3 border border-white/5">
+                                                                    <code className="block text-emerald-400 font-mono text-sm mb-2">
+                                                                        $ {ex.cmd}
+                                                                    </code>
+                                                                    {ex.output && (
+                                                                        <code className="block text-slate-400 font-mono text-xs mb-2 pl-4 border-r-2 border-slate-600">
+                                                                            {ex.output}
+                                                                        </code>
+                                                                    )}
+                                                                    <p className="text-slate-300 text-sm">{ex.explanation}</p>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Pro Tips */}
+                                                {cmd.proTips && cmd.proTips.length > 0 && (
+                                                    <div className="bg-purple-500/5 border border-purple-500/20 rounded-xl p-4">
+                                                        <p className="text-purple-400 font-bold mb-3 flex items-center gap-2">
+                                                            <Zap size={16} className="text-yellow-400" />
+                                                            نصائح احترافية
+                                                        </p>
+                                                        <ul className="space-y-2">
+                                                            {cmd.proTips.map((tip, i) => (
+                                                                <li key={i} className="text-slate-300 text-sm flex items-start gap-2">
+                                                                    <CheckCircle size={14} className="text-purple-400 mt-1 flex-shrink-0" />
+                                                                    <span>{tip}</span>
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    </div>
+                                                )}
+
+                                                {/* Warnings for dangerous commands */}
+                                                {cmd.warnings && cmd.warnings.length > 0 && (
+                                                    <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
+                                                        <p className="text-red-400 font-bold mb-3 flex items-center gap-2">
+                                                            <AlertTriangle size={16} />
+                                                            تحذيرات هامة!
+                                                        </p>
+                                                        <ul className="space-y-2">
+                                                            {cmd.warnings.map((warn, i) => (
+                                                                <li key={i} className="text-red-200 text-sm flex items-start gap-2">
+                                                                    <Shield size={14} className="text-red-400 mt-1 flex-shrink-0" />
+                                                                    <span>{warn}</span>
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    </div>
+                                                )}
+
+                                                {/* Additional tables/diagrams */}
+                                                {(cmd.optionsTable || cmd.diagram || cmd.shortcuts) && (
+                                                    <div className="prose prose-invert prose-sm max-w-none">
+                                                        <ReactMarkdown
+                                                            remarkPlugins={[remarkGfm]}
+                                                            components={{
+                                                                h2: ({ node, ...props }) => <h2 className="text-lg font-bold text-white mt-4 mb-3" {...props} />,
+                                                                table: ({ node, ...props }) => <table className="w-full border-collapse my-4" {...props} />,
+                                                                th: ({ node, ...props }) => <th className="border border-white/10 px-3 py-2 bg-[#7112AF]/20 text-white font-bold text-right text-sm" {...props} />,
+                                                                td: ({ node, ...props }) => <td className="border border-white/10 px-3 py-2 text-slate-300 text-sm" {...props} />,
+                                                                code: ({ node, inline, ...props }) =>
+                                                                    inline
+                                                                        ? <code className="px-1.5 py-0.5 bg-black/50 text-emerald-400 rounded font-mono text-xs" {...props} />
+                                                                        : <code className="block p-3 bg-black/50 text-emerald-400 rounded font-mono text-xs my-2 whitespace-pre" {...props} />
+                                                            }}
+                                                        >
+                                                            {cmd.optionsTable || cmd.diagram || cmd.shortcuts}
+                                                        </ReactMarkdown>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </motion.div>
+                                    )}
+                                </AnimatePresence>
+                            </motion.div>
+                        ))}
+                    </div>
+                )}
+
+                {/* Learning Path Status */}
+                <div className="mb-8 bg-gradient-to-r from-[#7112AF]/10 to-blue-500/10 border border-[#7112AF]/30 rounded-2xl p-6">
+                    <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                        <Award className="text-[#7112AF]" />
+                        رحلتك التعليمية
+                    </h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+                        <div className="bg-black/30 rounded-xl p-4">
+                            <p className="text-3xl font-bold text-[#7112AF]">{MODULE_SUMMARY.totalModules}</p>
+                            <p className="text-slate-400 text-sm mt-1">وحدة تعليمية</p>
+                        </div>
+                        <div className="bg-black/30 rounded-xl p-4">
+                            <p className="text-3xl font-bold text-blue-400">{MODULE_SUMMARY.totalTasks}</p>
+                            <p className="text-slate-400 text-sm mt-1">مهمة عملية</p>
+                        </div>
+                        <div className="bg-black/30 rounded-xl p-4">
+                            <p className="text-3xl font-bold text-emerald-400">{MODULE_SUMMARY.totalXP}</p>
+                            <p className="text-slate-400 text-sm mt-1">نقطة خبرة</p>
+                        </div>
+                        <div className="bg-black/30 rounded-xl p-4">
+                            <p className="text-3xl font-bold text-amber-400">~4h</p>
+                            <p className="text-slate-400 text-sm mt-1">وقت التعلم</p>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Call to Action */}
                 <div className="text-center">
                     <button
                         onClick={onNext}
-                        className="group relative inline-flex items-center gap-3 px-8 py-4 bg-[#7112AF] hover:bg-[#5a0e8c] text-white rounded-xl font-bold text-lg transition-all shadow-[0_0_20px_rgba(113,18,175,0.4)] hover:shadow-[0_0_30px_rgba(113,18,175,0.6)] hover:-translate-y-1"
+                        className="group relative inline-flex items-center gap-3 px-10 py-5 bg-gradient-to-r from-[#7112AF] to-[#5a0e8c] hover:from-[#5a0e8c] hover:to-[#7112AF] text-white rounded-xl font-bold text-lg transition-all shadow-[0_0_30px_rgba(113,18,175,0.4)] hover:shadow-[0_0_50px_rgba(113,18,175,0.6)] hover:-translate-y-1"
                     >
-                        <span>ابدأ المحاكاة الآن</span>
-                        <ArrowLeft className="transition-transform group-hover:-translate-x-1" />
+                        <Terminal size={24} />
+                        <span>ابدأ التدريب العملي الآن</span>
+                        <ArrowLeft className="transition-transform group-hover:-translate-x-2" size={24} />
                     </button>
+                    <p className="text-slate-500 text-sm mt-4 flex items-center justify-center gap-2">
+                        <Sparkles size={16} className="text-purple-400" />
+                        ستبدأ بالمهام التفاعلية على الترمنال الحقيقي
+                    </p>
                 </div>
             </div>
         </div>
     );
 };
-

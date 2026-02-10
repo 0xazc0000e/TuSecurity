@@ -4,14 +4,24 @@ import { GitMerge, ArrowDown } from 'lucide-react';
 import { useAnalytics } from '../../context/AnalyticsContext';
 
 export const SkillRelationshipMap = () => {
-    const { skills } = useAnalytics();
+    const { skillGraph } = useAnalytics();
 
-    // Dynamically calculate status based on skills
     const getStatus = (skillId) => {
-        if (skillId === 'foundations') return skills.terminal > 10 ? 'mastered' : 'in-progress';
-        if (skillId === 'os') return skills.filesystem > 50 ? 'mastered' : skills.filesystem > 10 ? 'in-progress' : 'locked';
-        if (skillId === 'network') return skills.admin > 30 ? 'in-progress' : 'locked';
-        return 'locked';
+        // Map component IDs to context keys if necessary, or ensure they match
+        // Component uses: foundations, network, os, scanning, encryption, hardening
+        // Context uses: bash_basics, network_basics, packet_analysis, etc.
+
+        // Mapping for now (simplification)
+        const map = {
+            'foundations': skillGraph.bash_basics,
+            'network': skillGraph.network_basics,
+            'os': 'mastered', // Core OS is usually always open if basics are done
+            'scanning': skillGraph.packet_analysis, // Approximation
+            'encryption': skillGraph.crypto_basics,
+            'hardening': skillGraph.system_hardening
+        };
+
+        return map[skillId] || 'locked';
     };
 
     const nodes = [

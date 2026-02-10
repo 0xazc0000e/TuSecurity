@@ -1,0 +1,630 @@
+// Backend API Server with Express and SQLite
+const express = require('express');
+const cors = require('cors');
+const sqlite3 = require('sqlite3').verbose();
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const path = require('path');
+const fs = require('fs');
+
+const app = express();
+const PORT = process.env.PORT || 3001;
+const JWT_SECRET = process.env.JWT_SECRET || 'tu-cyber-security-secret-key-2024';
+
+app.use(cors());
+app.use(express.json({ limit: '50mb' }));
+
+// Database initialization
+const db = new sqlite3.Database('./cyberclub.db', (err) => {
+    if (err) {
+        console.error('Database connection failed:', err);
+    } else {
+        console.log('Connected to SQLite database');
+        initializeDatabase();
+    }
+});
+
+function initializeDatabase() {
+    db.serialize(() => {
+        // Users table
+        db.run(`CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            email TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL,
+            name TEXT NOT NULL,
+            role TEXT DEFAULT 'student',
+            status TEXT DEFAULT 'active',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            last_active DATETIME,
+            progress INTEGER DEFAULT 0,
+            completed_courses INTEGER DEFAULT 0,
+            total_score INTEGER DEFAULT 0,
+            avatar TEXT,
+            settings TEXT
+        )`);
+
+        // Simulators table
+        db.run(`CREATE TABLE IF NOT EXISTS simulators (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL,
+            description TEXT,
+            category TEXT NOT NULL,
+            code TEXT NOT NULL,
+            status TEXT DEFAULT 'development',
+            version TEXT DEFAULT '1.0.0',
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            author_id INTEGER,
+            config TEXT,
+            lessons TEXT,
+            FOREIGN KEY (author_id) REFERENCES users(id)
+        )`);
+
+        // User progress table
+        db.run(`CREATE TABLE IF NOT EXISTS user_progress (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            simulator_id INTEGER NOT NULL,
+            lesson_id INTEGER,
+            completed BOOLEAN DEFAULT 0,
+            score INTEGER DEFAULT 0,
+            attempts INTEGER DEFAULT 0,
+            last_attempt DATETIME,
+            progress_data TEXT,
+            FOREIGN KEY (user_id) REFERENCES users(id),
+            FOREIGN KEY (simulator_id) REFERENCES simulators(id)
+        )`);
+
+        // Content/Articles table
+        db.run(`CREATE TABLE IF NOT EXISTS content (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            title TEXT NOT NULL,
+            content TEXT NOT NULL,
+            category TEXT NOT NULL,
+            type TEXT DEFAULT 'article',
+            author_id INTEGER,
+            status TEXT DEFAULT 'draft',
+            views INTEGER DEFAULT 0,
+            likes INTEGER DEFAULT 0,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            tags TEXT,
+            thumbnail TEXT,
+            FOREIGN KEY (author_id) REFERENCES users(id)
+        )`);
+
+        // System logs
+        db.run(`CREATE TABLE IF NOT EXISTS system_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            type TEXT NOT NULL,
+            level TEXT NOT NULL,
+            event TEXT NOT NULL,
+            user_id INTEGER,
+            ip_address TEXT,
+            user_agent TEXT,
+            details TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )`);
+
+        // Activity tracking
+        db.run(`CREATE TABLE IF NOT EXISTS activity (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NOT NULL,
+            action TEXT NOT NULL,
+            resource_type TEXT,
+            resource_id INTEGER,
+            metadata TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        )`);
+
+        // Insert default admin user
+        const hashedPassword = bcrypt.hashSync('admin123', 10);
+        db.run(`INSERT OR IGNORE INTO users (email, password, name, role) 
+                VALUES ('admin@tu.edu.sa', ?, 'System Administrator', 'admin')`, 
+                [hashedPassword]);
+
+        console.log('Database tables initialized');
+    });
+}
+
+// Authentication middleware
+const authenticateToken = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    
+    if (!token) {
+        return res.status(401).json({ error: 'Access token required' });
+    }
+
+    jwt.verify(token, JWT_SECRET, (err, user) => {
+        if (err) {
+            return res.status(403).json({ error: 'Invalid or expired token' });
+        }
+        req.user = user;
+        next();
+    });
+};
+
+const requireAdmin = (req, res, next) => {
+    if (req.user.role !== 'admin') {
+        return res.status(403).json({ error: 'Admin access required' });
+    }
+    next();
+};
+
+// Auth Routes
+app.post('/api/auth/login', async (req, res) => {
+    const { email, password } = req.body;
+    
+    db.get('SELECT * FROM users WHERE email = ?', [email], async (err, user) => {
+        if (err) {
+            return res.status(500).json({ error: 'Database error' });
+        }
+        if (!user) {
+            return res.status(401).json({ error: 'Invalid credentials' });
+        }
+        
+        const validPassword = await bcrypt.compare(password, user.password);
+        if (!validPassword) {
+            return res.status(401).json({ error: 'Invalid credentials' });
+        }
+
+        if (user.status !== 'active') {
+            return res.status(403).json({ error: 'Account is suspended' });
+        }
+
+        const token = jwt.sign(
+            { id: user.id, email: user.email, role: user.role, name: user.name },
+            JWT_SECRET,
+            { expiresIn: '24h' }
+        );
+
+        // Update last active
+        db.run('UPDATE users SET last_active = CURRENT_TIMESTAMP WHERE id = ?', [user.id]);
+
+        res.json({
+            token,
+            user: {
+                id: user.id,
+                email: user.email,
+                name: user.name,
+                role: user.role,
+                progress: user.progress,
+                completed_courses: user.completed_courses,
+                total_score: user.total_score
+            }
+        });
+    });
+});
+
+app.post('/api/auth/register', async (req, res) => {
+    const { email, password, name } = req.body;
+    
+    try {
+        const hashedPassword = await bcrypt.hash(password, 10);
+        
+        db.run(
+            'INSERT INTO users (email, password, name) VALUES (?, ?, ?)',
+            [email, hashedPassword, name],
+            function(err) {
+                if (err) {
+                    if (err.message.includes('UNIQUE constraint failed')) {
+                        return res.status(400).json({ error: 'Email already exists' });
+                    }
+                    return res.status(500).json({ error: 'Registration failed' });
+                }
+                
+                res.status(201).json({ 
+                    message: 'User registered successfully',
+                    userId: this.lastID 
+                });
+            }
+        );
+    } catch (error) {
+        res.status(500).json({ error: 'Server error' });
+    }
+});
+
+// Admin Routes - Users
+app.get('/api/admin/users', authenticateToken, requireAdmin, (req, res) => {
+    const { search, role, status, page = 1, limit = 20 } = req.query;
+    let query = 'SELECT id, email, name, role, status, created_at, last_active, progress, completed_courses, total_score FROM users WHERE 1=1';
+    let params = [];
+
+    if (search) {
+        query += ' AND (name LIKE ? OR email LIKE ?)';
+        params.push(`%${search}%`, `%${search}%`);
+    }
+    if (role && role !== 'all') {
+        query += ' AND role = ?';
+        params.push(role);
+    }
+    if (status && status !== 'all') {
+        query += ' AND status = ?';
+        params.push(status);
+    }
+
+    query += ' ORDER BY created_at DESC LIMIT ? OFFSET ?';
+    params.push(parseInt(limit), (parseInt(page) - 1) * parseInt(limit));
+
+    db.all(query, params, (err, users) => {
+        if (err) {
+            return res.status(500).json({ error: 'Database error' });
+        }
+        res.json(users);
+    });
+});
+
+app.put('/api/admin/users/:id', authenticateToken, requireAdmin, (req, res) => {
+    const { id } = req.params;
+    const { name, email, role, status } = req.body;
+    
+    db.run(
+        'UPDATE users SET name = ?, email = ?, role = ?, status = ?, last_active = CURRENT_TIMESTAMP WHERE id = ?',
+        [name, email, role, status, id],
+        function(err) {
+            if (err) {
+                return res.status(500).json({ error: 'Update failed' });
+            }
+            res.json({ message: 'User updated successfully' });
+        }
+    );
+});
+
+app.delete('/api/admin/users/:id', authenticateToken, requireAdmin, (req, res) => {
+    const { id } = req.params;
+    
+    db.run('DELETE FROM users WHERE id = ?', [id], function(err) {
+        if (err) {
+            return res.status(500).json({ error: 'Delete failed' });
+        }
+        res.json({ message: 'User deleted successfully' });
+    });
+});
+
+// Admin Routes - Simulators
+app.get('/api/admin/simulators', authenticateToken, requireAdmin, (req, res) => {
+    db.all(`
+        SELECT s.*, u.name as author_name,
+        (SELECT COUNT(*) FROM user_progress WHERE simulator_id = s.id) as user_count
+        FROM simulators s
+        LEFT JOIN users u ON s.author_id = u.id
+        ORDER BY s.created_at DESC
+    `, (err, simulators) => {
+        if (err) {
+            return res.status(500).json({ error: 'Database error' });
+        }
+        res.json(simulators);
+    });
+});
+
+app.post('/api/admin/simulators', authenticateToken, requireAdmin, (req, res) => {
+    const { name, description, category, code, config, lessons } = req.body;
+    
+    db.run(
+        `INSERT INTO simulators (name, description, category, code, author_id, config, lessons, status) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'active')`,
+        [name, description, category, code, req.user.id, JSON.stringify(config), JSON.stringify(lessons)],
+        function(err) {
+            if (err) {
+                return res.status(500).json({ error: 'Failed to create simulator' });
+            }
+            
+            // Log activity
+            db.run(
+                'INSERT INTO activity (user_id, action, resource_type, resource_id) VALUES (?, ?, ?, ?)',
+                [req.user.id, 'create_simulator', 'simulator', this.lastID]
+            );
+            
+            res.status(201).json({ 
+                message: 'Simulator created successfully',
+                id: this.lastID 
+            });
+        }
+    );
+});
+
+app.put('/api/admin/simulators/:id', authenticateToken, requireAdmin, (req, res) => {
+    const { id } = req.params;
+    const { name, description, category, code, status, config, lessons } = req.body;
+    
+    db.run(
+        `UPDATE simulators SET name = ?, description = ?, category = ?, code = ?, 
+         status = ?, config = ?, lessons = ?, updated_at = CURRENT_TIMESTAMP 
+         WHERE id = ?`,
+        [name, description, category, code, status, JSON.stringify(config), JSON.stringify(lessons), id],
+        function(err) {
+            if (err) {
+                return res.status(500).json({ error: 'Update failed' });
+            }
+            res.json({ message: 'Simulator updated successfully' });
+        }
+    );
+});
+
+app.delete('/api/admin/simulators/:id', authenticateToken, requireAdmin, (req, res) => {
+    const { id } = req.params;
+    
+    db.run('DELETE FROM simulators WHERE id = ?', [id], function(err) {
+        if (err) {
+            return res.status(500).json({ error: 'Delete failed' });
+        }
+        res.json({ message: 'Simulator deleted successfully' });
+    });
+});
+
+// Admin Routes - Content
+app.get('/api/admin/content', authenticateToken, requireAdmin, (req, res) => {
+    const { category, status, type } = req.query;
+    let query = `
+        SELECT c.*, u.name as author_name 
+        FROM content c 
+        LEFT JOIN users u ON c.author_id = u.id 
+        WHERE 1=1
+    `;
+    let params = [];
+
+    if (category && category !== 'all') {
+        query += ' AND c.category = ?';
+        params.push(category);
+    }
+    if (status && status !== 'all') {
+        query += ' AND c.status = ?';
+        params.push(status);
+    }
+    if (type && type !== 'all') {
+        query += ' AND c.type = ?';
+        params.push(type);
+    }
+
+    query += ' ORDER BY c.created_at DESC';
+
+    db.all(query, params, (err, content) => {
+        if (err) {
+            return res.status(500).json({ error: 'Database error' });
+        }
+        res.json(content);
+    });
+});
+
+app.post('/api/admin/content', authenticateToken, requireAdmin, (req, res) => {
+    const { title, content: body, category, type, tags, thumbnail } = req.body;
+    
+    db.run(
+        'INSERT INTO content (title, content, category, type, author_id, tags, thumbnail, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+        [title, body, category, type, req.user.id, JSON.stringify(tags), thumbnail, 'published'],
+        function(err) {
+            if (err) {
+                return res.status(500).json({ error: 'Failed to create content' });
+            }
+            res.status(201).json({ 
+                message: 'Content created successfully',
+                id: this.lastID 
+            });
+        }
+    );
+});
+
+// Admin Routes - System Logs
+app.get('/api/admin/logs', authenticateToken, requireAdmin, (req, res) => {
+    const { type, level, limit = 100 } = req.query;
+    let query = `
+        SELECT l.*, u.name as user_name, u.email as user_email
+        FROM system_logs l
+        LEFT JOIN users u ON l.user_id = u.id
+        WHERE 1=1
+    `;
+    let params = [];
+
+    if (type && type !== 'all') {
+        query += ' AND l.type = ?';
+        params.push(type);
+    }
+    if (level && level !== 'all') {
+        query += ' AND l.level = ?';
+        params.push(level);
+    }
+
+    query += ' ORDER BY l.created_at DESC LIMIT ?';
+    params.push(parseInt(limit));
+
+    db.all(query, params, (err, logs) => {
+        if (err) {
+            return res.status(500).json({ error: 'Database error' });
+        }
+        res.json(logs);
+    });
+});
+
+// Admin Dashboard Stats
+app.get('/api/admin/stats', authenticateToken, requireAdmin, (req, res) => {
+    db.get('SELECT COUNT(*) as total_users FROM users', (err, users) => {
+        db.get("SELECT COUNT(*) as active_users FROM users WHERE status = 'active'", (err, active) => {
+            db.get('SELECT COUNT(*) as total_simulators FROM simulators', (err, simulators) => {
+                db.get('SELECT COUNT(*) as total_content FROM content', (err, content) => {
+                    db.get(`
+                        SELECT COUNT(*) as today_logins 
+                        FROM activity 
+                        WHERE action = 'login' 
+                        AND created_at >= date('now')
+                    `, (err, logins) => {
+                        res.json({
+                            totalUsers: users.total_users,
+                            activeUsers: active.active_users,
+                            totalSimulators: simulators.total_simulators,
+                            totalContent: content.total_content,
+                            todayLogins: logins.today_logins,
+                            systemHealth: 98,
+                            securityScore: 95
+                        });
+                    });
+                });
+            });
+        });
+    });
+});
+
+// User Routes - Simulators
+app.get('/api/simulators', authenticateToken, (req, res) => {
+    db.all(
+        'SELECT id, name, description, category, status, version, config, lessons FROM simulators WHERE status = ?',
+        ['active'],
+        (err, simulators) => {
+            if (err) {
+                return res.status(500).json({ error: 'Database error' });
+            }
+            res.json(simulators.map(s => ({
+                ...s,
+                config: JSON.parse(s.config || '{}'),
+                lessons: JSON.parse(s.lessons || '[]')
+            })));
+        }
+    );
+});
+
+app.get('/api/simulators/:id', authenticateToken, (req, res) => {
+    const { id } = req.params;
+    
+    db.get(
+        'SELECT * FROM simulators WHERE id = ? AND status = ?',
+        [id, 'active'],
+        (err, simulator) => {
+            if (err) {
+                return res.status(500).json({ error: 'Database error' });
+            }
+            if (!simulator) {
+                return res.status(404).json({ error: 'Simulator not found' });
+            }
+            
+            // Get user progress
+            db.get(
+                'SELECT * FROM user_progress WHERE user_id = ? AND simulator_id = ?',
+                [req.user.id, id],
+                (err, progress) => {
+                    res.json({
+                        ...simulator,
+                        code: simulator.code,
+                        config: JSON.parse(simulator.config || '{}'),
+                        lessons: JSON.parse(simulator.lessons || '[]'),
+                        userProgress: progress || { completed: false, score: 0, attempts: 0 }
+                    });
+                }
+            );
+        }
+    );
+});
+
+// User Progress Tracking
+app.post('/api/progress', authenticateToken, (req, res) => {
+    const { simulator_id, lesson_id, completed, score, progress_data } = req.body;
+    
+    db.get(
+        'SELECT * FROM user_progress WHERE user_id = ? AND simulator_id = ? AND lesson_id = ?',
+        [req.user.id, simulator_id, lesson_id],
+        (err, existing) => {
+            if (existing) {
+                db.run(
+                    `UPDATE user_progress SET completed = ?, score = ?, attempts = attempts + 1, 
+                     last_attempt = CURRENT_TIMESTAMP, progress_data = ? 
+                     WHERE id = ?`,
+                    [completed, score, JSON.stringify(progress_data), existing.id],
+                    function(err) {
+                        if (err) {
+                            return res.status(500).json({ error: 'Update failed' });
+                        }
+                        res.json({ message: 'Progress updated' });
+                    }
+                );
+            } else {
+                db.run(
+                    `INSERT INTO user_progress (user_id, simulator_id, lesson_id, completed, score, attempts, progress_data) 
+                     VALUES (?, ?, ?, ?, ?, 1, ?)`,
+                    [req.user.id, simulator_id, lesson_id, completed, score, JSON.stringify(progress_data)],
+                    function(err) {
+                        if (err) {
+                            return res.status(500).json({ error: 'Insert failed' });
+                        }
+                        res.json({ message: 'Progress recorded' });
+                    }
+                );
+            }
+        }
+    );
+});
+
+// Content Routes
+app.get('/api/content', (req, res) => {
+    const { category, type, limit = 20 } = req.query;
+    let query = 'SELECT id, title, category, type, views, likes, created_at, tags, thumbnail FROM content WHERE status = ?';
+    let params = ['published'];
+
+    if (category) {
+        query += ' AND category = ?';
+        params.push(category);
+    }
+    if (type) {
+        query += ' AND type = ?';
+        params.push(type);
+    }
+
+    query += ' ORDER BY created_at DESC LIMIT ?';
+    params.push(parseInt(limit));
+
+    db.all(query, params, (err, content) => {
+        if (err) {
+            return res.status(500).json({ error: 'Database error' });
+        }
+        res.json(content.map(c => ({
+            ...c,
+            tags: JSON.parse(c.tags || '[]')
+        })));
+    });
+});
+
+app.get('/api/content/:id', (req, res) => {
+    const { id } = req.params;
+    
+    db.get(
+        'SELECT c.*, u.name as author_name FROM content c LEFT JOIN users u ON c.author_id = u.id WHERE c.id = ?',
+        [id],
+        (err, content) => {
+            if (err || !content) {
+                return res.status(404).json({ error: 'Content not found' });
+            }
+            
+            // Increment views
+            db.run('UPDATE content SET views = views + 1 WHERE id = ?', [id]);
+            
+            res.json({
+                ...content,
+                tags: JSON.parse(content.tags || '[]')
+            });
+        }
+    );
+});
+
+// Activity Tracking Middleware
+app.use('/api/', authenticateToken, (req, res, next) => {
+    if (req.user && req.method !== 'GET') {
+        db.run(
+            'INSERT INTO activity (user_id, action, resource_type, metadata) VALUES (?, ?, ?, ?)',
+            [req.user.id, req.method.toLowerCase(), req.path, JSON.stringify(req.body)]
+        );
+    }
+    next();
+});
+
+// Error handling
+app.use((err, req, res, next) => {
+    console.error(err.stack);
+    res.status(500).json({ error: 'Something went wrong!' });
+});
+
+app.listen(PORT, () => {
+    console.log(`CyberClub API Server running on port ${PORT}`);
+    console.log(`Admin panel: http://localhost:${PORT}`);
+});
+
+module.exports = app;

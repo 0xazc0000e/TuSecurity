@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { executeBashCommand, resolvePath } from './bashUtils';
 import { useAnalytics } from '../../../context/AnalyticsContext';
 
-export const MiniTerminal = ({ vfs, setVfs, currentPath, setCurrentPath, setLastCommand }) => {
+export const MiniTerminal = ({ vfs, setVfs, currentPath, setCurrentPath, setLastCommand, onCommandExecuted }) => {
     const { logEvent } = useAnalytics();
     const [history, setHistory] = useState([
         { type: 'output', content: 'Welcome to TUCC Bash Simulator v2.0' },
@@ -35,31 +35,67 @@ export const MiniTerminal = ({ vfs, setVfs, currentPath, setCurrentPath, setLast
             // 1. Add Input to History
             const newHistory = [...history, { type: 'input', content: command, prompt: getPrompt() }];
 
-            // Analytics: Log Command Attempt
-            logEvent('BASH_CMD', { command, path: currentPath });
-
             // 2. Execute Command
             const result = executeBashCommand(command, currentPath, vfs, 'user');
 
-            // 3. Update State
+            // 3. Analytics & State Update
+            const baseCommand = command.split(' ')[0];
+
             if (result.error) {
                 newHistory.push({ type: 'error', content: result.error });
-                // Analytics: Log Error
-                logEvent('BASH_ERROR', { command, error: result.error });
-            } else if (result.output) {
-                // Handle clear command specifically if needed, or just push output
-                if (result.output === 'CLEAR_SIGNAL') {
-                    setHistory([{ type: 'output', content: 'Terminal cleared.' }]);
-                    setInput('');
-                    setLastCommand(command);
-                    return;
+
+                // Smart Error Categorization
+                let errorType = 'syntax'; // Default
+                let eventType = 'SYNTAX_ERROR';
+
+                if (result.error.includes('No such file') || result.error.includes('not a directory')) {
+                    errorType = 'path';
+                    eventType = 'PATH_ERROR';
+                } else if (result.error.includes('Permission denied')) {
+                    errorType = 'conceptual';
+                    eventType = 'CONCEPT_CONFUSION_DETECTED';
+                } else if (result.error.includes('command not found')) {
+                    errorType = 'syntax';
+                    eventType = 'SYNTAX_ERROR';
                 }
-                newHistory.push({ type: 'output', content: result.output });
+
+                // Dispatch Error Event
+                logEvent('ERROR_DETECTED', {
+                    errorType,
+                    command: baseCommand,
+                    context: result.error
+                });
+
+            } else {
+                // Success Case
+                if (result.output) {
+                    if (result.output === 'CLEAR_SIGNAL') {
+                        setHistory([{ type: 'output', content: 'Terminal cleared.' }]);
+                        setInput('');
+                        if (setLastCommand) setLastCommand(command);
+                        // Analytics for Clear
+                        logEvent('BASH_COMMAND_EXECUTED', { command: 'clear', domain: 'os', success: true });
+                        return;
+                    }
+                    newHistory.push({ type: 'output', content: result.output });
+                }
+
+                // Analytics: Success Event
+                logEvent('BASH_COMMAND_EXECUTED', {
+                    command: baseCommand,
+                    domain: 'os',
+                    success: true
+                });
             }
 
             setVfs(result.newVfs);
             setCurrentPath(result.newPath);
-            setLastCommand(command); // Trigger checks in parent
+            if (setLastCommand) setLastCommand(command);
+
+            // Notify parent for task validation
+            if (onCommandExecuted) {
+                onCommandExecuted(command, result.output || '');
+            }
 
             setHistory(newHistory);
             setInput('');

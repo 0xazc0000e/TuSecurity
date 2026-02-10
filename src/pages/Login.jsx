@@ -1,18 +1,31 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Shield, Lock, User, ArrowRight } from 'lucide-react';
+import { Shield, Lock, User, ArrowRight, AlertCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { MatrixBackground } from '../components/ui/MatrixBackground';
+import { useAuth } from '../context/AuthContext';
 
 export default function Login() {
     const navigate = useNavigate();
+    const { login } = useAuth();
     const [formData, setFormData] = useState({ email: '', password: '' });
+    const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        // Validate and simulate login
-        console.log('Login:', formData);
-        navigate('/');
+        setError('');
+        setLoading(true);
+        
+        const result = await login(formData.email, formData.password);
+        
+        if (result.success) {
+            navigate('/profile');
+        } else {
+            setError(result.error || 'Login failed');
+        }
+        
+        setLoading(false);
     };
 
     return (
@@ -38,6 +51,13 @@ export default function Login() {
                     </div>
 
                     <form onSubmit={handleSubmit} className="space-y-6">
+                        {error && (
+                            <div className="p-3 bg-red-500/20 border border-red-500/30 rounded-lg flex items-center gap-2 text-red-400 text-sm">
+                                <AlertCircle size={16} />
+                                <span>{error}</span>
+                            </div>
+                        )}
+
                         <div className="space-y-2">
                             <label className="text-sm font-bold text-slate-300 block text-right">البريد الجامعي</label>
                             <div className="relative group">
@@ -82,9 +102,10 @@ export default function Login() {
 
                         <button
                             type="submit"
-                            className="w-full bg-gradient-to-r from-[#7112AF] to-[#520EA4] text-white font-bold py-3 rounded-xl hover:shadow-[0_0_30px_rgba(113,18,175,0.4)] transition-all flex items-center justify-center gap-2 group"
+                            disabled={loading}
+                            className="w-full bg-gradient-to-r from-[#7112AF] to-[#520EA4] text-white font-bold py-3 rounded-xl hover:shadow-[0_0_30px_rgba(113,18,175,0.4)] transition-all flex items-center justify-center gap-2 group disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            <span>دخول</span>
+                            <span>{loading ? 'جاري تسجيل الدخول...' : 'دخول'}</span>
                             <ArrowRight size={18} className="group-hover:-translate-x-1 transition-transform" />
                         </button>
                     </form>
