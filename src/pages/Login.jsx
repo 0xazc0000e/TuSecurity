@@ -1,30 +1,68 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { Shield, Lock, User, ArrowRight, AlertCircle } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Shield, Lock, User, ArrowRight, AlertCircle, CheckCircle, Eye, EyeOff } from 'lucide-react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { MatrixBackground } from '../components/ui/MatrixBackground';
 import { useAuth } from '../context/AuthContext';
 
 export default function Login() {
     const navigate = useNavigate();
+    const location = useLocation();
     const { login } = useAuth();
     const [formData, setFormData] = useState({ email: '', password: '' });
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const [showPassword, setShowPassword] = useState(false);
+    const [success, setSuccess] = useState('');
+
+    // Redirect back to where user came from, or to profile
+    const from = location.state?.from?.pathname || '/profile';
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
+        setSuccess('');
         setLoading(true);
-        
-        const result = await login(formData.email, formData.password);
-        
-        if (result.success) {
-            navigate('/profile');
-        } else {
-            setError(result.error || 'Login failed');
+
+        // Client-side validation
+        if (!formData.email.trim()) {
+            setError('يرجى إدخال البريد الإلكتروني');
+            setLoading(false);
+            return;
         }
-        
+
+        if (!formData.password) {
+            setError('يرجى إدخال كلمة المرور');
+            setLoading(false);
+            return;
+        }
+
+        try {
+            const result = await login(formData.email, formData.password);
+
+            if (result.success) {
+                setSuccess('تم تسجيل الدخول بنجاح! جارٍ التحويل...');
+                setTimeout(() => {
+                    // Redirect to onboarding if profile is incomplete
+                    const dest = !result.user?.major ? '/onboarding' : from;
+                    navigate(dest, { replace: true });
+                }, 800);
+            } else {
+                // Map common errors to Arabic
+                let errorMsg = result.error;
+                if (errorMsg.includes('Invalid credentials')) {
+                    errorMsg = 'البريد الإلكتروني أو كلمة المرور غير صحيحة';
+                } else if (errorMsg.includes('suspended') || errorMsg.includes('inactive')) {
+                    errorMsg = 'تم تعليق هذا الحساب. تواصل مع المسؤول.';
+                } else if (errorMsg.includes('الاتصال')) {
+                    errorMsg = 'لا يمكن الاتصال بالخادم. تأكد من تشغيل السيرفر.';
+                }
+                setError(errorMsg);
+            }
+        } catch (err) {
+            setError('حدث خطأ غير متوقع. حاول مرة أخرى.');
+        }
+
         setLoading(false);
     };
 
@@ -51,15 +89,33 @@ export default function Login() {
                     </div>
 
                     <form onSubmit={handleSubmit} className="space-y-6">
+                        {/* Error Message */}
                         {error && (
-                            <div className="p-3 bg-red-500/20 border border-red-500/30 rounded-lg flex items-center gap-2 text-red-400 text-sm">
-                                <AlertCircle size={16} />
+                            <motion.div
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="p-3 bg-red-500/20 border border-red-500/30 rounded-lg flex items-center gap-2 text-red-400 text-sm"
+                            >
+                                <AlertCircle size={16} className="flex-shrink-0" />
                                 <span>{error}</span>
-                            </div>
+                            </motion.div>
                         )}
 
+                        {/* Success Message */}
+                        {success && (
+                            <motion.div
+                                initial={{ opacity: 0, y: -10 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                className="p-3 bg-green-500/20 border border-green-500/30 rounded-lg flex items-center gap-2 text-green-400 text-sm"
+                            >
+                                <CheckCircle size={16} className="flex-shrink-0" />
+                                <span>{success}</span>
+                            </motion.div>
+                        )}
+
+                        {/* Email Field */}
                         <div className="space-y-2">
-                            <label className="text-sm font-bold text-slate-300 block text-right">البريد الجامعي</label>
+                            <label className="text-sm font-bold text-slate-300 block text-right">البريد الإلكتروني</label>
                             <div className="relative group">
                                 <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none text-slate-500 group-focus-within:text-[#7112AF] transition-colors">
                                     <User size={20} />
@@ -68,13 +124,15 @@ export default function Login() {
                                     type="email"
                                     required
                                     className="w-full bg-[#050214]/50 border border-white/10 rounded-xl py-3 pr-12 pl-4 text-white placeholder-slate-600 focus:outline-none focus:border-[#7112AF] focus:ring-1 focus:ring-[#7112AF] transition-all text-right"
-                                    placeholder="s44xxxxxxx@students.tu.edu.sa"
+                                    placeholder="admin@tu.edu.sa"
                                     value={formData.email}
                                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                                    disabled={loading}
                                 />
                             </div>
                         </div>
 
+                        {/* Password Field */}
                         <div className="space-y-2">
                             <label className="text-sm font-bold text-slate-300 block text-right">كلمة المرور</label>
                             <div className="relative group">
@@ -82,22 +140,22 @@ export default function Login() {
                                     <Lock size={20} />
                                 </div>
                                 <input
-                                    type="password"
+                                    type={showPassword ? 'text' : 'password'}
                                     required
-                                    className="w-full bg-[#050214]/50 border border-white/10 rounded-xl py-3 pr-12 pl-4 text-white placeholder-slate-600 focus:outline-none focus:border-[#7112AF] focus:ring-1 focus:ring-[#7112AF] transition-all text-right"
+                                    className="w-full bg-[#050214]/50 border border-white/10 rounded-xl py-3 pr-12 pl-12 text-white placeholder-slate-600 focus:outline-none focus:border-[#7112AF] focus:ring-1 focus:ring-[#7112AF] transition-all text-right"
                                     placeholder="••••••••"
                                     value={formData.password}
                                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                                    disabled={loading}
                                 />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute inset-y-0 left-0 pl-4 flex items-center text-slate-500 hover:text-white transition-colors"
+                                >
+                                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                                </button>
                             </div>
-                        </div>
-
-                        <div className="flex items-center justify-between text-xs">
-                            <a href="#" className="text-[#bbb6d1] hover:text-white transition-colors">نسيت كلمة المرور؟</a>
-                            <label className="flex items-center gap-2 cursor-pointer text-slate-400">
-                                <span>تذكرني</span>
-                                <input type="checkbox" className="rounded border-white/10 bg-[#050214] text-[#7112AF] focus:ring-0" />
-                            </label>
                         </div>
 
                         <button
@@ -105,8 +163,17 @@ export default function Login() {
                             disabled={loading}
                             className="w-full bg-gradient-to-r from-[#7112AF] to-[#520EA4] text-white font-bold py-3 rounded-xl hover:shadow-[0_0_30px_rgba(113,18,175,0.4)] transition-all flex items-center justify-center gap-2 group disabled:opacity-50 disabled:cursor-not-allowed"
                         >
-                            <span>{loading ? 'جاري تسجيل الدخول...' : 'دخول'}</span>
-                            <ArrowRight size={18} className="group-hover:-translate-x-1 transition-transform" />
+                            {loading ? (
+                                <>
+                                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                    <span>جاري تسجيل الدخول...</span>
+                                </>
+                            ) : (
+                                <>
+                                    <span>دخول</span>
+                                    <ArrowRight size={18} className="group-hover:-translate-x-1 transition-transform" />
+                                </>
+                            )}
                         </button>
                     </form>
 

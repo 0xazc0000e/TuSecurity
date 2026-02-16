@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { 
+import {
     Plus, Edit2, Trash2, RefreshCw, FileText, Image, Tag,
-    AlertTriangle, CheckCircle, X, Search
+    AlertTriangle, CheckCircle, X, Search, Upload
 } from 'lucide-react';
-import { adminAPI } from '../../services/api';
+import { adminAPI, lmsAPI } from '../../services/api';
 
 export default function ContentManagement() {
     const [content, setContent] = useState([]);
@@ -15,11 +15,13 @@ export default function ContentManagement() {
     const [editingItem, setEditingItem] = useState(null);
     const [formData, setFormData] = useState({
         title: '',
-        content: '',
+        body: '',
         type: 'news',
         category: 'general',
-        image_url: ''
+        image_url: '' // Keep for backward compatibility or external URLs
     });
+    const [selectedFile, setSelectedFile] = useState(null);
+    const [previewUrl, setPreviewUrl] = useState(null);
 
     useEffect(() => {
         fetchContent();
@@ -28,8 +30,18 @@ export default function ContentManagement() {
     const fetchContent = async () => {
         try {
             setLoading(true);
-            const data = await adminAPI.getContent();
-            setContent(data);
+            // Fetch Articles (Knowledge Base)
+            const data = await lmsAPI.getArticles();
+            // Map to unified structure if necessary, or just use as is
+            // Articles have 'cover_image', legacy had 'thumbnail'
+            const mapped = data.map(item => ({
+                ...item,
+                type: 'article', // Force type for now
+                image_url: item.cover_image,
+                thumbnail: item.cover_image,
+                body: item.content
+            }));
+            setContent(mapped);
             setError(null);
         } catch (err) {
             console.error('Failed to fetch content:', err);
@@ -39,19 +51,52 @@ export default function ContentManagement() {
         }
     };
 
+    const handleFileChange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            setSelectedFile(file);
+            setPreviewUrl(URL.createObjectURL(file));
+        }
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
+            const data = new FormData();
+            data.append('title', formData.title);
+            data.append('body', formData.body); // Kept for consistency checking
+            data.append('type', formData.type);
+            data.append('category', formData.category);
+
+            if (formData.image_url) {
+                // For articles, we use 'cover_image' key
+                data.append('cover_image', formData.image_url);
+                data.append('image_url', formData.image_url); // Keep for legacy safety
+            }
+
+            if (selectedFile) {
+                // For articles, multer expects 'cover_image' field
+                data.append('cover_image', selectedFile);
+            }
+
+            // Map fields for Article API (it expects 'content' not 'body')
+            data.append('content', formData.body);
+
+            console.log('Submitting to lmsAPI...');
+
             if (editingItem) {
-                await adminAPI.updateContent(editingItem.id, formData);
+                await lmsAPI.updateArticle(editingItem.id, data);
             } else {
-                await adminAPI.createContent(formData);
+                await lmsAPI.createArticle(data);
             }
             setShowModal(false);
             setEditingItem(null);
-            setFormData({ title: '', content: '', type: 'news', category: 'general', image_url: '' });
+            setFormData({ title: '', body: '', type: 'news', category: 'general', image_url: '' });
+            setSelectedFile(null);
+            setPreviewUrl(null);
             fetchContent();
         } catch (err) {
+            console.error('Submit error:', err);
             alert('فشل في حفظ المحتوى');
         }
     };
@@ -60,11 +105,13 @@ export default function ContentManagement() {
         setEditingItem(item);
         setFormData({
             title: item.title,
-            content: item.content,
+            body: item.body || item.content || '',
             type: item.type,
             category: item.category || 'general',
-            image_url: item.image_url || ''
+            image_url: item.image_url || item.thumbnail || ''
         });
+        setPreviewUrl(item.thumbnail || item.image_url || null);
+        setSelectedFile(null);
         setShowModal(true);
     };
 
@@ -78,9 +125,9 @@ export default function ContentManagement() {
         }
     };
 
-    const filteredContent = content.filter(item => 
+    const filteredContent = content.filter(item =>
         item.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        item.content?.toLowerCase().includes(searchQuery.toLowerCase())
+        (item.body || item.content || '').toLowerCase().includes(searchQuery.toLowerCase())
     );
 
     if (loading) {
@@ -112,10 +159,12 @@ export default function ContentManagement() {
                     <button onClick={fetchContent} className="p-2 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10">
                         <RefreshCw size={20} className="text-gray-400" />
                     </button>
-                    <button 
+                    <button
                         onClick={() => {
                             setEditingItem(null);
-                            setFormData({ title: '', content: '', type: 'news', category: 'general', image_url: '' });
+                            setFormData({ title: '', body: '', type: 'news', category: 'general', image_url: '' });
+                            setSelectedFile(null);
+                            setPreviewUrl(null);
                             setShowModal(true);
                         }}
                         className="flex items-center gap-2 px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600"
@@ -129,8 +178,8 @@ export default function ContentManagement() {
             {/* Search */}
             <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-                <input 
-                    type="text" 
+                <input
+                    type="text"
                     placeholder="بحث في المحتوى..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
@@ -148,7 +197,17 @@ export default function ContentManagement() {
                         transition={{ delay: index * 0.05 }}
                         className="bg-white/5 border border-white/10 rounded-xl overflow-hidden hover:border-purple-500/30 transition-colors"
                     >
-                        {item.image_url && (
+                        {(item.thumbnail || item.image_url) ? (
+                            <img
+                                src={item.thumbnail?.startsWith('/') ? `http://localhost:5000${item.thumbnail}` : item.thumbnail || item.image_url}
+                                alt={item.title}
+                                className="w-full h-32 object-cover"
+                                onError={(e) => {
+                                    e.target.onerror = null;
+                                    e.target.src = 'https://via.placeholder.com/400x200?text=No+Image';
+                                }}
+                            />
+                        ) : (
                             <div className="h-32 bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center">
                                 <Image size={32} className="text-gray-400" />
                             </div>
@@ -159,19 +218,19 @@ export default function ContentManagement() {
                                 <span className="px-2 py-1 bg-purple-500/20 rounded text-xs text-purple-400">{item.category}</span>
                             </div>
                             <h3 className="text-white font-bold mb-2 line-clamp-2">{item.title}</h3>
-                            <p className="text-gray-400 text-sm line-clamp-2 mb-4">{item.content}</p>
+                            <p className="text-gray-400 text-sm line-clamp-2 mb-4">{item.body || item.content}</p>
                             <div className="flex items-center justify-between">
                                 <span className="text-gray-500 text-xs">
                                     {new Date(item.created_at).toLocaleDateString('ar-SA')}
                                 </span>
                                 <div className="flex gap-2">
-                                    <button 
+                                    <button
                                         onClick={() => handleEdit(item)}
                                         className="p-2 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30"
                                     >
                                         <Edit2 size={16} />
                                     </button>
-                                    <button 
+                                    <button
                                         onClick={() => handleDelete(item.id)}
                                         className="p-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30"
                                     >
@@ -208,7 +267,7 @@ export default function ContentManagement() {
                                     <input
                                         type="text"
                                         value={formData.title}
-                                        onChange={(e) => setFormData({...formData, title: e.target.value})}
+                                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                                         className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-purple-500"
                                         required
                                     />
@@ -219,7 +278,7 @@ export default function ContentManagement() {
                                         <label className="block text-sm font-medium text-gray-400 mb-2">النوع</label>
                                         <select
                                             value={formData.type}
-                                            onChange={(e) => setFormData({...formData, type: e.target.value})}
+                                            onChange={(e) => setFormData({ ...formData, type: e.target.value })}
                                             className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-purple-500"
                                         >
                                             <option value="news">خبر</option>
@@ -231,7 +290,7 @@ export default function ContentManagement() {
                                         <label className="block text-sm font-medium text-gray-400 mb-2">التصنيف</label>
                                         <select
                                             value={formData.category}
-                                            onChange={(e) => setFormData({...formData, category: e.target.value})}
+                                            onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                                             className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-purple-500"
                                         >
                                             <option value="general">عام</option>
@@ -245,8 +304,8 @@ export default function ContentManagement() {
                                 <div>
                                     <label className="block text-sm font-medium text-gray-400 mb-2">المحتوى</label>
                                     <textarea
-                                        value={formData.content}
-                                        onChange={(e) => setFormData({...formData, content: e.target.value})}
+                                        value={formData.body}
+                                        onChange={(e) => setFormData({ ...formData, body: e.target.value })}
                                         rows={6}
                                         className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-purple-500 resize-none"
                                         required
@@ -254,15 +313,63 @@ export default function ContentManagement() {
                                 </div>
 
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-400 mb-2">رابط الصورة (اختياري)</label>
-                                    <input
-                                        type="url"
-                                        value={formData.image_url}
-                                        onChange={(e) => setFormData({...formData, image_url: e.target.value})}
-                                        className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-purple-500"
-                                        placeholder="https://example.com/image.jpg"
-                                    />
+                                    <label className="block text-sm font-medium text-gray-400 mb-2">الصورة (تحميل ملف)</label>
+                                    <div className="flex items-center gap-4">
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={handleFileChange}
+                                            className="hidden"
+                                            id="file-upload"
+                                        />
+                                        <label
+                                            htmlFor="file-upload"
+                                            className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-lg cursor-pointer hover:bg-white/10 transition-colors text-sm text-gray-300"
+                                        >
+                                            <Upload size={16} />
+                                            <span>{selectedFile ? selectedFile.name : 'اختر صورة'}</span>
+                                        </label>
+                                    </div>
+                                    {previewUrl && (
+                                        <div className="mt-4 relative w-full h-40 rounded-lg overflow-hidden border border-white/10">
+                                            <img
+                                                src={previewUrl.startsWith('blob:') ? previewUrl : (previewUrl.startsWith('/') ? `http://localhost:5000${previewUrl}` : previewUrl)}
+                                                alt="Preview"
+                                                className="w-full h-full object-cover"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setSelectedFile(null);
+                                                    setPreviewUrl(null);
+                                                    setFormData({ ...formData, image_url: '' });
+                                                }}
+                                                className="absolute top-2 right-2 p-1 bg-red-500/80 rounded-full text-white hover:bg-red-600"
+                                            >
+                                                <X size={14} />
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
+
+                                {/* Fallback URL input */}
+                                {!selectedFile && (
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-400 mb-2">أو رابط صورة خارجي</label>
+                                        <input
+                                            type="url"
+                                            value={formData.image_url}
+                                            onChange={(e) => {
+                                                setFormData({ ...formData, image_url: e.target.value });
+                                                setPreviewUrl(e.target.value);
+                                            }}
+                                            className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                                            placeholder="https://example.com/image.jpg"
+                                        />
+                                        <p className="text-xs text-gray-500 mt-1">Debug: {formData.image_url}</p>
+                                        {/* Debug: {formData.image_url} */}
+                                    </div>
+                                )}
 
                                 <div className="flex gap-3 pt-4">
                                     <button

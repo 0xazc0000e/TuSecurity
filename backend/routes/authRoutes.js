@@ -9,6 +9,6 @@ router.post('/login', authController.login);
 
 // Protected routes (require authentication)
 router.get('/profile', authController.authenticate, authController.getProfile);
-router.put('/profile', authController.authenticate, authController.updateProfile);
+router.put('/profile', authController.authenticate, authController.upload.single('avatar'), authController.updateProfile);
 
 module.exports = router;

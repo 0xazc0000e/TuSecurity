@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { 
-    Users, Search, Filter, Shield, 
+import {
+    Users, Search, Filter, Shield, Activity,
     Lock, Award, AlertTriangle, CheckCircle,
     XCircle, RefreshCw, Trash2, Ban, Unlock
 } from 'lucide-react';
@@ -17,6 +17,8 @@ export default function UserManagementAdvanced() {
     const [showResetModal, setShowResetModal] = useState(false);
     const [newPassword, setNewPassword] = useState('');
     const [actionLoading, setActionLoading] = useState(false);
+    const [filterStatus, setFilterStatus] = useState('all');
+    const [updatingRole, setUpdatingRole] = useState(null);
 
     useEffect(() => {
         fetchUsers();
@@ -41,10 +43,10 @@ export default function UserManagementAdvanced() {
             setActionLoading(true);
             const reason = currentStatus === 'suspended' ? '' : 'Suspended by admin';
             await adminAPI.banUser(userId, reason);
-            
+
             // Update local state
-            setUsers(users.map(user => 
-                user.id === userId 
+            setUsers(users.map(user =>
+                user.id === userId
                     ? { ...user, status: currentStatus === 'suspended' ? 'active' : 'suspended' }
                     : user
             ));
@@ -73,6 +75,21 @@ export default function UserManagementAdvanced() {
         }
     };
 
+    const handleRoleChange = async (userId, newRole) => {
+        try {
+            setUpdatingRole(userId);
+            await adminAPI.updateUserRole(userId, newRole);
+            setUsers(users.map(user =>
+                user.id === userId ? { ...user, role: newRole } : user
+            ));
+        } catch (err) {
+            console.error('Failed to update role:', err);
+            alert('فشل في تحديث الدور');
+        } finally {
+            setUpdatingRole(null);
+        }
+    };
+
     const handleResetPassword = async () => {
         if (!newPassword || newPassword.length < 6) {
             alert('كلمة المرور يجب أن تكون 6 أحرف على الأقل');
@@ -95,11 +112,12 @@ export default function UserManagementAdvanced() {
     };
 
     const filteredUsers = users.filter(user => {
-        const matchesSearch = 
+        const matchesSearch =
             user.username?.toLowerCase().includes(searchQuery.toLowerCase()) ||
             user.email?.toLowerCase().includes(searchQuery.toLowerCase());
         const matchesRole = filterRole === 'all' || user.role === filterRole;
-        return matchesSearch && matchesRole;
+        const matchesStatus = filterStatus === 'all' || user.status === filterStatus;
+        return matchesSearch && matchesRole && matchesStatus;
     });
 
     const getStatusBadge = (status) => {
@@ -129,15 +147,13 @@ export default function UserManagementAdvanced() {
     };
 
     const getRoleBadge = (role) => {
-        return role === 'admin' ? (
-            <span className="flex items-center gap-1 text-purple-400 text-sm">
-                <Shield size={14} />
-                مدير
-            </span>
-        ) : (
-            <span className="flex items-center gap-1 text-blue-400 text-sm">
-                <Users size={14} />
-                طالب
+        const styles = { admin: 'text-purple-400', editor: 'text-blue-400', student: 'text-gray-400' };
+        const labels = { admin: 'مدير', editor: 'محرر', student: 'طالب' };
+        const icons = { admin: <Shield size={14} />, editor: <Lock size={14} />, student: <Users size={14} /> };
+        return (
+            <span className={`flex items-center gap-1 text-sm ${styles[role]}`}>
+                {icons[role]}
+                {labels[role]}
             </span>
         );
     };
@@ -158,7 +174,7 @@ export default function UserManagementAdvanced() {
             <div className="bg-red-500/20 border border-red-500/30 rounded-xl p-6 text-center">
                 <AlertTriangle className="text-red-400 mx-auto mb-4" size={32} />
                 <p className="text-red-400 mb-4">{error}</p>
-                <button 
+                <button
                     onClick={fetchUsers}
                     className="px-4 py-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors"
                 >
@@ -176,7 +192,7 @@ export default function UserManagementAdvanced() {
                     <h2 className="text-2xl font-bold text-white mb-2">إدارة المستخدمين</h2>
                     <p className="text-gray-400">إدارة حسابات المستخدمين وصلاحياتهم</p>
                 </div>
-                <button 
+                <button
                     onClick={fetchUsers}
                     disabled={loading}
                     className="p-2 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10 transition-colors disabled:opacity-50"
@@ -227,9 +243,9 @@ export default function UserManagementAdvanced() {
                         <span className="text-green-400 text-sm">+24%</span>
                     </div>
                     <div className="text-3xl font-bold text-white mb-2">
-                        {Math.round(users.reduce((acc, u) => acc + u.progress, 0) / users.length)}%
+                        {users.filter(u => u.role === 'admin').length}
                     </div>
-                    <div className="text-gray-400 text-sm">متوسط التقدم</div>
+                    <div className="text-gray-400 text-sm">المدراء</div>
                 </motion.div>
 
                 <motion.div
@@ -257,8 +273,8 @@ export default function UserManagementAdvanced() {
                         <input
                             type="text"
                             placeholder="البحث عن مستخدم..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
                             className="w-full pr-12 pl-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#7112AF] transition-colors"
                         />
                     </div>
@@ -285,7 +301,7 @@ export default function UserManagementAdvanced() {
                         <option value="inactive">غير نشط</option>
                     </select>
 
-                        <button className="px-4 py-3 bg-[#7112AF]/20 text-[#7112AF] rounded-lg hover:bg-[#7112AF]/30 transition-colors flex items-center justify-center gap-2">
+                    <button className="px-4 py-3 bg-[#7112AF]/20 text-[#7112AF] rounded-lg hover:bg-[#7112AF]/30 transition-colors flex items-center justify-center gap-2">
                         <Lock size={20} />
                         تصدير
                     </button>
@@ -326,7 +342,21 @@ export default function UserManagementAdvanced() {
                                             </div>
                                         </div>
                                     </td>
-                                    <td className="px-6 py-4">{getRoleBadge(user.role)}</td>
+                                    <td className="px-6 py-4">
+                                        <div className="flex items-center gap-2">
+                                            {getRoleBadge(user.role)}
+                                            <select
+                                                value={user.role}
+                                                onChange={(e) => handleRoleChange(user.id, e.target.value)}
+                                                disabled={updatingRole === user.id}
+                                                className="bg-white/10 border border-white/20 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-purple-500"
+                                            >
+                                                <option value="student">طالب</option>
+                                                <option value="editor">محرر</option>
+                                                <option value="admin">مدير</option>
+                                            </select>
+                                        </div>
+                                    </td>
                                     <td className="px-6 py-4">{getStatusBadge(user.status)}</td>
                                     <td className="px-6 py-4">
                                         <div className="flex items-center gap-1 text-yellow-400">
@@ -342,11 +372,10 @@ export default function UserManagementAdvanced() {
                                             <button
                                                 onClick={() => handleBanUser(user.id, user.status)}
                                                 disabled={actionLoading}
-                                                className={`p-2 rounded-lg transition-colors ${
-                                                    user.status === 'suspended'
+                                                className={`p-2 rounded-lg transition-colors ${user.status === 'suspended'
                                                         ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
                                                         : 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
-                                                }`}
+                                                    }`}
                                                 title={user.status === 'suspended' ? 'إلغاء الحظر' : 'حظر'}
                                             >
                                                 {user.status === 'suspended' ? <Unlock size={16} /> : <Ban size={16} />}

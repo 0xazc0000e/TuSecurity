@@ -74,7 +74,7 @@ export const KnowledgeHubSection = () => {
                                 exit={{ opacity: 0, y: -10 }}
                                 transition={{ duration: 0.3, delay: index * 0.1 }}
                                 className="group p-6 bg-[#050214] border border-white/5 rounded-2xl hover:border-[#7112AF]/30 transition-colors cursor-pointer"
-                                onClick={() => navigate(`/${activeTab}`)}
+                                onClick={() => navigate('/knowledge')}
                             >
                                 <div className="flex justify-between items-start mb-4">
                                     <div className={`p-3 rounded-lg bg-white/5 ${activeTab === 'news' ? 'text-green-400' : activeTab === 'courses' ? 'text-orange-400' : 'text-blue-400'}`}>
@@ -110,7 +110,7 @@ export const KnowledgeHubSection = () => {
 
                 <div className="mt-10 text-center">
                     <button
-                        onClick={() => navigate(`/${activeTab}`)}
+                        onClick={() => navigate('/knowledge')}
                         className="text-slate-400 hover:text-white text-sm font-mono border-b border-transparent hover:border-[#7112AF] transition-all pb-1"
                     >
                         عرض المزيد من {tabs.find(t => t.id === activeTab).label}

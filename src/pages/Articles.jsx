@@ -4,7 +4,8 @@ import { BookOpen, Terminal, Globe, Shield, Cpu, ExternalLink, ArrowRight, Zap, 
 import { SectionHeader } from '../components/ui/SectionHeader';
 import { MatrixBackground } from '../components/ui/MatrixBackground';
 import { useAnalytics } from '../context/AnalyticsContext';
-import { useDatabase } from '../context/DatabaseContext';
+import { useAuth } from '../context/AuthContext';
+import { InteractionBar } from '../components/ui/InteractionBar';
 
 const PORTALS = [
     { id: 'os', title: 'أنظمة التشغيل', icon: Terminal, color: 'text-green-400', bg: 'bg-green-400/10', desc: 'قلب التحكم: Linux & Windows' },
@@ -15,8 +16,25 @@ const PORTALS = [
 
 export default function Articles() {
     const { cognitiveLayers, logEvent } = useAnalytics();
-    const { articles: ARTICLES } = useDatabase();
+    const { articles: ARTICLES } = useDatabase(); // Kept for fallback
+    const { apiCall } = useAuth();
+    const [articlesData, setArticlesData] = useState([]);
     const [activePortal, setActivePortal] = useState(null);
+    const [loading, setLoading] = useState(true);
+
+    React.useEffect(() => {
+        const fetchArticles = async () => {
+            try {
+                const data = await apiCall('/lms/articles');
+                setArticlesData(data);
+            } catch (error) {
+                console.error("Failed to fetch articles", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchArticles();
+    }, []);
 
     const getSmartLevel = (portalId, articleLevel) => {
         const score = cognitiveLayers[portalId]?.conceptual || 0;
@@ -26,11 +44,8 @@ export default function Articles() {
         return { show: true, label: articleLevel, color: 'text-slate-500' };
     };
 
-    const handleRead = (article) => {
-        if (window.confirm(`بدء قراءة "${article.title}"؟`)) {
-            logEvent('ARTICLE_COMPLETED', { domain: article.portal, title: article.title });
-            alert('تم إنهاء القراءة! (+8 نقاط مفاهيمية)');
-        }
+    const handleXpAward = (xp) => {
+        alert(`تم إنهاء القراءة! (+${xp} نقاط مفاهيمية)`);
     };
 
     return (
@@ -81,8 +96,13 @@ export default function Articles() {
                         </button>
 
                         <div className="grid gap-4">
-                            {ARTICLES.filter(a => a.portal === activePortal).map(article => {
-                                const levelInfo = getSmartLevel(article.portal, article.level);
+                            {articlesData.map(article => {
+                                // Default level info if missing
+                                const levelInfo = { show: true, label: 'مقال', color: 'text-slate-500' };
+
+                                // Parse tags safely
+                                const tags = typeof article.tags === 'string' ? JSON.parse(article.tags || '[]') : article.tags;
+
                                 return (
                                     <div key={article.id} className="bg-white/5 border border-white/10 rounded-xl p-6 flex flex-col md:flex-row items-center justify-between gap-6 hover:border-[#7112AF]/30 transition-all group">
                                         <div className="flex-1">
@@ -90,21 +110,16 @@ export default function Articles() {
                                                 <span className={`text-[10px] font-bold px-2 py-0.5 rounded bg-white/5 ${levelInfo.color}`}>
                                                     {levelInfo.label}
                                                 </span>
-                                                {article.tags.map(tag => <span key={tag} className="text-[10px] text-slate-500">#{tag}</span>)}
+                                                {Array.isArray(tags) && tags.map(tag => <span key={tag} className="text-[10px] text-slate-500">#{tag}</span>)}
                                             </div>
                                             <h3 className="text-lg font-bold text-white mb-1 group-hover:text-[#d4b3ff] transition-colors">{article.title}</h3>
-                                            <p className="text-slate-400 text-xs">مقال تفاعلي يشرح المفهوم ويربطه بالتطبيق العملي.</p>
+                                            <p className="text-slate-400 text-xs line-clamp-2">{article.description || 'مقال تفاعلي يشرح المفهوم ويربطه بالتطبيق العملي.'}</p>
                                         </div>
 
-                                        <div className="flex gap-3">
-                                            <button
-                                                onClick={() => handleRead(article)}
-                                                className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 text-xs font-bold transition-colors"
-                                            >
-                                                اقرأ المقال
-                                            </button>
+                                        <div className="flex bg-black/20 rounded-xl p-2 items-center gap-3">
+                                            <InteractionBar type="article" itemId={article.id} showView={true} onView={handleXpAward} />
                                             <button className="px-4 py-2 rounded-lg bg-[#7112AF] hover:bg-[#5a0e8b] text-white text-xs font-bold transition-colors flex items-center gap-2 shadow-lg shadow-[#7112AF]/20">
-                                                <Zap size={12} fill="white" /> جرب عملياً
+                                                <BookOpen size={12} fill="white" /> اقرأ
                                             </button>
                                         </div>
                                     </div>

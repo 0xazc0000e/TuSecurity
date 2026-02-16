@@ -4,7 +4,8 @@ import { Calendar, Users, Filter, Zap, Globe, Shield, Terminal, AlertTriangle, P
 import { SectionHeader } from '../components/ui/SectionHeader';
 import { MatrixBackground } from '../components/ui/MatrixBackground';
 import { useAnalytics } from '../context/AnalyticsContext';
-import { useDatabase } from '../context/DatabaseContext';
+import { useAuth } from '../context/AuthContext';
+import { InteractionBar } from '../components/ui/InteractionBar';
 
 const SPOTLIGHT_THREAT = {
     title: 'هجوم SolarWinds: القصة الكاملة',
@@ -15,22 +16,40 @@ const SPOTLIGHT_THREAT = {
 
 export default function News() {
     const { cognitiveLayers, logEvent } = useAnalytics();
-    const { news: NEWS_DATA } = useDatabase();
+    const { news: NEWS_DATA } = useDatabase(); // Kept for fallback if needed, but not used in new logic
+    const { apiCall } = useAuth();
+    const [newsData, setNewsData] = useState([]);
     const [view, setView] = useState('personal'); // personal, spotlight, micro, filter
-    const [activeFilter, setActiveFilter] = useState('all');
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        const fetchNews = async () => {
+            try {
+                const data = await apiCall('/news');
+                setNewsData(data);
+            } catch (error) {
+                console.error("Failed to fetch news", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchNews();
+    }, []);
 
     // Personalized Sort
     const personalizedNews = useMemo(() => {
-        return [...NEWS_DATA].sort((a, b) => {
-            const scoreA = cognitiveLayers[a.domain]?.conceptual < 40 ? 10 : 0;
-            const scoreB = cognitiveLayers[b.domain]?.conceptual < 40 ? 10 : 0;
+        return [...newsData].sort((a, b) => {
+            // Mock domain for sorting if missing
+            const domainA = a.tags ? a.tags.split(',')[0] : 'general';
+            const domainB = b.tags ? b.tags.split(',')[0] : 'general';
+            const scoreA = cognitiveLayers[domainA]?.conceptual < 40 ? 10 : 0;
+            const scoreB = cognitiveLayers[domainB]?.conceptual < 40 ? 10 : 0;
             return scoreB - scoreA;
         });
-    }, [cognitiveLayers]);
+    }, [newsData, cognitiveLayers]);
 
-    const handleRead = (news) => {
-        logEvent('NEWS_READ', { domain: news.domain, title: news.title });
-        alert(`تم تسجيل قراءة: ${news.title} (+3 وعي)`);
+    const handleXpAward = (xp) => {
+        alert(`تم تسجيل قراءة الخبر! (+${xp} وعي)`);
     };
 
     return (
@@ -76,24 +95,16 @@ export default function News() {
                                     <div className="flex flex-col md:flex-row gap-6">
                                         <div className="flex-1">
                                             <div className="flex items-center gap-2 text-slate-400 text-xs mb-2">
-                                                <Calendar size={12} /> {news.date}
-                                                <span className="px-2 py-0.5 rounded bg-white/10 text-white">{news.domain}</span>
+                                                <Calendar size={12} /> {new Date(news.created_at).toLocaleDateString()}
+                                                {news.tags && <span className="px-2 py-0.5 rounded bg-white/10 text-white">{news.tags}</span>}
                                             </div>
                                             <h3 className="text-xl font-bold text-white mb-2 group-hover:text-[#d4b3ff] transition-colors">{news.title}</h3>
-                                            <p className="text-slate-300 text-sm mb-4 leading-relaxed">{news.desc}</p>
+                                            <p className="text-slate-300 text-sm mb-4 leading-relaxed line-clamp-3">{news.body}</p>
 
-                                            {/* Mandatory Education Section */}
-                                            <div className="bg-white/5 rounded-xl p-4 mb-4 border-r-2 border-[#7112AF]">
-                                                <h4 className="text-[#7112AF] font-bold text-xs mb-2 flex items-center gap-2"><Zap size={12} /> لماذا هذا مهم لك؟</h4>
-                                                <p className="text-slate-400 text-xs">{news.imp}</p>
-                                            </div>
-
-                                            <div className="flex gap-4">
-                                                <button onClick={() => handleRead(news)} className="bg-[#7112AF] hover:bg-[#5a0e8b] text-white px-6 py-2 rounded-lg font-bold text-sm transition-colors shadow-lg shadow-[#7112AF]/20">
-                                                    اقرأ واكسب نقاط وعي
-                                                </button>
+                                            <div className="flex items-center justify-between mt-4">
+                                                <InteractionBar type="news" itemId={news.id} showView={true} onView={handleXpAward} />
                                                 <button className="text-slate-400 hover:text-white text-sm flex items-center gap-1">
-                                                    جرب المحاكي المرتبط <ChevronLeft size={14} />
+                                                    اقرأ المزيد <ChevronLeft size={14} />
                                                 </button>
                                             </div>
                                         </div>
@@ -129,13 +140,13 @@ export default function News() {
                     {/* VIEW 3: MICRO NEWS */}
                     {view === 'micro' && (
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            {NEWS_DATA.map(news => (
-                                <div key={news.id} className="bg-white/5 p-4 rounded-xl border border-white/5 hover:border-[#7112AF] transition-all cursor-pointer group text-center" onClick={() => handleRead(news)}>
+                            {newsData.map(news => (
+                                <div key={news.id} className="bg-white/5 p-4 rounded-xl border border-white/5 hover:border-[#7112AF] transition-all cursor-pointer group text-center">
                                     <div className="w-10 h-10 bg-[#7112AF]/20 rounded-full flex items-center justify-center mx-auto mb-3 text-[#d4b3ff] group-hover:scale-110 transition-transform">
-                                        {news.domain === 'os' ? <Terminal size={18} /> : news.domain === 'network' ? <Globe size={18} /> : <Shield size={18} />}
+                                        <Shield size={18} />
                                     </div>
                                     <h4 className="font-bold text-white text-sm mb-2 line-clamp-2">{news.title}</h4>
-                                    <span className="text-[10px] text-slate-500 bg-white/5 px-2 py-0.5 rounded">{news.domain}</span>
+                                    <InteractionBar type="news" itemId={news.id} />
                                 </div>
                             ))}
                         </motion.div>

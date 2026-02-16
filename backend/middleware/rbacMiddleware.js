@@ -17,41 +17,41 @@ const ROLE_HIERARCHY = {
 const checkPermission = (requiredRole) => {
     return (req, res, next) => {
         const authHeader = req.headers.authorization;
-        
+
         if (!authHeader || !authHeader.startsWith('Bearer ')) {
             return res.status(401).json({ error: 'Access denied. No token provided.' });
         }
-        
+
         const token = authHeader.split(' ')[1];
-        
+
         try {
             const decoded = jwt.verify(token, JWT_SECRET);
-            
+
             db.get(
                 'SELECT role FROM users WHERE id = ?',
-                [decoded.userId],
+                [decoded.id],
                 (err, user) => {
                     if (err) {
                         console.error('Permission check error:', err);
                         return res.status(500).json({ error: 'Internal server error' });
                     }
-                    
+
                     if (!user) {
                         return res.status(401).json({ error: 'User not found' });
                     }
-                    
+
                     const userLevel = ROLE_HIERARCHY[user.role] || 0;
                     const requiredLevel = ROLE_HIERARCHY[requiredRole] || 0;
-                    
+
                     if (userLevel < requiredLevel) {
-                        return res.status(403).json({ 
+                        return res.status(403).json({
                             error: 'Forbidden. Insufficient permissions.',
                             required: requiredRole,
                             current: user.role
                         });
                     }
-                    
-                    req.userId = decoded.userId;
+
+                    req.userId = decoded.id;
                     req.userRole = user.role;
                     next();
                 }
@@ -77,16 +77,16 @@ const requireEditor = checkPermission('editor');
  */
 const requireAuth = (req, res, next) => {
     const authHeader = req.headers.authorization;
-    
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return res.status(401).json({ error: 'Access denied. No token provided.' });
     }
-    
+
     const token = authHeader.split(' ')[1];
-    
+
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
-        req.userId = decoded.userId;
+        req.userId = decoded.id;
         next();
     } catch (error) {
         return res.status(401).json({ error: 'Invalid token' });

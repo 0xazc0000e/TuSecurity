@@ -5,7 +5,8 @@ export const AdminSidebar = ({ activeTab, setActiveTab }) => {
     const MENU_ITEMS = [
         { id: 'overview', label: 'نظرة عامة', icon: Layout },
         { id: 'users', label: 'إدارة المستخدمين', icon: Users },
-        { id: 'content', label: 'إدارة المحتوى', icon: FileText },
+        { id: 'users', label: 'إدارة المستخدمين', icon: Users },
+        // { id: 'content', label: 'إدارة المحتوى', icon: FileText },
         { id: 'simulators', label: 'المحاكيات', icon: Terminal },
         { id: 'analytics', label: 'التحليلات التعليمية', icon: BarChart2 },
         { id: 'logs', label: 'سجلات النظام', icon: Activity },
@@ -36,8 +37,8 @@ export const AdminSidebar = ({ activeTab, setActiveTab }) => {
                         key={item.id}
                         onClick={() => setActiveTab(item.id)}
                         className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all duration-300 relative overflow-hidden group ${activeTab === item.id
-                                ? 'bg-gradient-to-r from-[#7112AF]/20 to-[#7112AF]/5 text-white border border-[#7112AF]/30 shadow-inner'
-                                : 'text-slate-400 hover:bg-white/5 hover:text-white'
+                            ? 'bg-gradient-to-r from-[#7112AF]/20 to-[#7112AF]/5 text-white border border-[#7112AF]/30 shadow-inner'
+                            : 'text-slate-400 hover:bg-white/5 hover:text-white'
                             }`}
                     >
                         <item.icon size={18} className={`transition-transform duration-300 ${activeTab === item.id ? 'scale-110 text-[#d4b3ff]' : 'group-hover:scale-110'}`} />

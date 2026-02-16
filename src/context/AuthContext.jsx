@@ -1,12 +1,12 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
-// API Configuration
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+// API Configuration - point to real backend
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-// Helper function for API calls
-async function apiCall(endpoint, options = {}) {
+// Helper function for API calls with error handling
+export async function apiCall(endpoint, options = {}) {
     const url = `${API_BASE_URL}${endpoint}`;
-    
+
     const config = {
         headers: {
             'Content-Type': 'application/json',
@@ -14,6 +14,11 @@ async function apiCall(endpoint, options = {}) {
         },
         ...options
     };
+
+    // If body is FormData, remove Content-Type to let browser set boundary
+    if (options.body instanceof FormData) {
+        delete config.headers['Content-Type'];
+    }
 
     // Add auth token if available
     const token = localStorage.getItem('token');
@@ -23,15 +28,25 @@ async function apiCall(endpoint, options = {}) {
 
     try {
         const response = await fetch(url, config);
-        
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || 'API request failed');
+
+        // Parse response body
+        let data;
+        try {
+            data = await response.json();
+        } catch {
+            data = { error: 'Server returned invalid response' };
         }
 
-        return await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || `Request failed with status ${response.status}`);
+        }
+
+        return data;
     } catch (error) {
-        console.error('API Error:', error);
+        // Network error (server not running)
+        if (error.name === 'TypeError' && error.message.includes('fetch')) {
+            throw new Error('لا يمكن الاتصال بالخادم. تأكد من تشغيل السيرفر.');
+        }
         throw error;
     }
 }
@@ -52,6 +67,9 @@ export const AuthProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
 
+    // User needs onboarding if authenticated but missing major
+    const needsOnboarding = isAuthenticated && user && !user.major;
+
     // Check for stored token on mount
     useEffect(() => {
         const token = localStorage.getItem('token');
@@ -62,7 +80,7 @@ export const AuthProvider = ({ children }) => {
         }
     }, []);
 
-    // Fetch user profile
+    // Fetch user profile from real API
     const fetchProfile = useCallback(async () => {
         try {
             const data = await apiCall('/auth/profile');
@@ -70,13 +88,16 @@ export const AuthProvider = ({ children }) => {
             setIsAuthenticated(true);
         } catch (error) {
             console.error('Failed to fetch profile:', error);
-            logout();
+            // Token is invalid or expired - clean up
+            localStorage.removeItem('token');
+            setUser(null);
+            setIsAuthenticated(false);
         } finally {
             setLoading(false);
         }
     }, []);
 
-    // Login function
+    // Login function - POST to real backend
     const login = async (email, password) => {
         try {
             const data = await apiCall('/auth/login', {
@@ -84,50 +105,58 @@ export const AuthProvider = ({ children }) => {
                 body: JSON.stringify({ email, password })
             });
 
+            // Store JWT token
             localStorage.setItem('token', data.token);
             setUser(data.user);
             setIsAuthenticated(true);
             return { success: true, user: data.user };
         } catch (error) {
-            return { success: false, error: error.message };
+            return { success: false, error: error.message || 'فشل تسجيل الدخول' };
         }
     };
 
-    // Register function
-    const register = async (username, email, password) => {
+    // Register function - POST to real backend
+    const register = async ({ username, email, password, universityId }) => {
         try {
             const data = await apiCall('/auth/register', {
                 method: 'POST',
-                body: JSON.stringify({ username, email, password, role: 'student' })
+                body: JSON.stringify({ username, email, password, university_id: universityId, role: 'student' })
             });
 
+            // Store JWT token
             localStorage.setItem('token', data.token);
             setUser(data.user);
             setIsAuthenticated(true);
             return { success: true, user: data.user };
         } catch (error) {
-            return { success: false, error: error.message };
+            return { success: false, error: error.message || 'فشل إنشاء الحساب' };
         }
     };
 
-    // Logout function
+    // Logout function - clear token and state
     const logout = () => {
         localStorage.removeItem('token');
         setUser(null);
         setIsAuthenticated(false);
     };
 
-    // Update profile
+    // Update profile - PUT to real backend
     const updateProfile = async (profileData) => {
         try {
+            const isFormData = profileData instanceof FormData;
             const data = await apiCall('/auth/profile', {
                 method: 'PUT',
-                body: JSON.stringify(profileData)
+                body: isFormData ? profileData : JSON.stringify(profileData)
             });
-            await fetchProfile();
+            // Use the returned user object directly if available
+            if (data.user) {
+                setUser(data.user);
+            } else {
+                await fetchProfile();
+            }
             return { success: true };
         } catch (error) {
-            return { success: false, error: error.message };
+            return { success: false, error: error.message || 'فشل تحديث الملف الشخصي' };
         }
     };
 
@@ -135,6 +164,7 @@ export const AuthProvider = ({ children }) => {
         user,
         isAuthenticated,
         loading,
+        needsOnboarding,
         login,
         register,
         logout,

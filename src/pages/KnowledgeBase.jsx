@@ -1,597 +1,687 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
-import { 
-    BookOpen, Terminal, Globe, Shield, Cpu, ExternalLink, ArrowRight, Zap, Network,
-    Search, Filter, Clock, Eye, Heart, MessageSquare, Share2, Bookmark,
-    TrendingUp, Star, Users, Calendar, Award, Target, Brain,
-    PlayCircle, CheckCircle, Lock, Unlock, FileText, Video,
-    Download, ThumbsUp, ThumbsDown, BarChart3, Hash
+import { useParams } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+    Shield, Target, Terminal, Clock, Calendar, Users, Star,
+    ChevronRight, ChevronDown, Play, BookOpen, Award, Filter,
+    Video, FileText, Hash, Lock, CheckCircle, User, Eye,
+    Heart, Bookmark, Share2
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
-import { MatrixBackground } from '../components/ui/MatrixBackground';
+import { lmsAPI } from '../services/api';
+import axios from 'axios';
+import LessonViewer from '../components/LessonViewer';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
-const KNOWLEDGE_CATEGORIES = [
-    { 
-        id: 'os', 
-        title: 'أنظمة التشغيل', 
-        icon: Terminal, 
-        color: 'text-green-400', 
-        bg: 'bg-green-400/10', 
-        desc: 'قلب التحكم: Linux & Windows',
-        count: 45,
-        progress: 78
-    },
-    { 
-        id: 'network', 
-        title: 'الشبكات والاتصال', 
-        icon: Globe, 
-        color: 'text-blue-400', 
-        bg: 'bg-blue-400/10', 
-        desc: 'لغة التواصل بين الأجهزة',
-        count: 38,
-        progress: 65
-    },
-    { 
-        id: 'security', 
-        title: 'أساسيات الأمن', 
-        icon: Shield, 
-        color: 'text-red-400', 
-        bg: 'bg-red-400/10', 
-        desc: 'الدفاع والهجوم السيبراني',
-        count: 52,
-        progress: 82
-    },
-    { 
-        id: 'tools', 
-        title: 'الأدوات والتقنيات', 
-        icon: Cpu, 
-        color: 'text-purple-400', 
-        bg: 'bg-purple-400/10', 
-        desc: 'ترسانة الهاكر الأخلاقي',
-        count: 41,
-        progress: 71
-    },
-    { 
-        id: 'cryptography', 
-        title: 'التشفير', 
-        icon: Lock, 
-        color: 'text-yellow-400', 
-        bg: 'bg-yellow-400/10', 
-        desc: 'فن إخفاء المعلومات',
-        count: 29,
-        progress: 59
-    },
-    { 
-        id: 'web', 
-        title: 'أمن الويب', 
-        icon: Globe, 
-        color: 'text-orange-400', 
-        bg: 'bg-orange-400/10', 
-        desc: 'حماية التطبيقات والمواقع',
-        count: 36,
-        progress: 74
-    }
-];
+const ICON_MAP = {
+    'Shield': Shield, 'Target': Target, 'Terminal': Terminal,
+    'Cpu': Terminal, 'Server': Terminal
+};
 
-const LESSONS = [
-    {
-        id: 1,
-        title: 'مقدمة إلى أوامر Linux الأساسية',
-        category: 'os',
-        level: 'beginner',
-        duration: '45 دقيقة',
-        views: 1234,
-        likes: 89,
-        rating: 4.8,
-        author: 'أحمد محمد',
-        date: '2024-01-20',
-        description: 'تعلم أساسيات التعامل مع سطر الأوامر في Linux',
-        tags: ['linux', 'bash', 'أساسيات'],
-        thumbnail: 'linux-basics',
-        completed: false,
-        progress: 0,
-        type: 'video'
-    },
-    {
-        id: 2,
-        title: 'فهم بروتوكول TCP/IP',
-        category: 'network',
-        level: 'intermediate',
-        duration: '60 دقيقة',
-        views: 856,
-        likes: 67,
-        rating: 4.6,
-        author: 'فاطمة علي',
-        date: '2024-01-19',
-        description: 'شرح مفصل لبروتوكولات الإنترنت الأساسية',
-        tags: ['tcp', 'ip', 'شبكات'],
-        thumbnail: 'tcp-ip',
-        completed: true,
-        progress: 100,
-        type: 'article'
-    },
-    {
-        id: 3,
-        title: 'هجمات حقن SQL',
-        category: 'security',
-        level: 'advanced',
-        duration: '90 دقيقة',
-        views: 2341,
-        likes: 156,
-        rating: 4.9,
-        author: 'محمد خالد',
-        date: '2024-01-18',
-        description: 'كيفية اكتشاف واستغلال ثغرات حقن SQL',
-        tags: ['sql', 'حقن', 'أمن'],
-        thumbnail: 'sql-injection',
-        completed: false,
-        progress: 35,
-        type: 'interactive'
-    },
-    {
-        id: 4,
-        title: 'أدوات Nmap المتقدمة',
-        category: 'tools',
-        level: 'intermediate',
-        duration: '75 دقيقة',
-        views: 1567,
-        likes: 98,
-        rating: 4.7,
-        author: 'سارة أحمد',
-        date: '2024-01-17',
-        description: 'استخدام Nmap لفحص الشبكات واستكشاف الخدمات',
-        tags: ['nmap', 'فحص', 'شبكات'],
-        thumbnail: 'nmap',
-        completed: true,
-        progress: 100,
-        type: 'video'
-    }
-];
 
-export default function KnowledgeBase() {
-    const navigate = useNavigate();
-    const [selectedCategory, setSelectedCategory] = useState('all');
-    const [searchTerm, setSearchTerm] = useState('');
-    const [filterLevel, setFilterLevel] = useState('all');
-    const [filterType, setFilterType] = useState('all');
-    const [sortBy, setSortBy] = useState('trending');
-    const [viewMode, setViewMode] = useState('grid');
-    const [showFilters, setShowFilters] = useState(false);
+const BASE_URL = 'http://localhost:5000';
 
-    const filteredLessons = LESSONS.filter(lesson => {
-        const matchesCategory = selectedCategory === 'all' || lesson.category === selectedCategory;
-        const matchesSearch = lesson.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           lesson.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           lesson.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
-        const matchesLevel = filterLevel === 'all' || lesson.level === filterLevel;
-        const matchesType = filterType === 'all' || lesson.type === filterType;
-        return matchesCategory && matchesSearch && matchesLevel && matchesType;
-    }).sort((a, b) => {
-        switch (sortBy) {
-            case 'trending':
-                return b.views - a.views;
-            case 'rating':
-                return b.rating - a.rating;
-            case 'recent':
-                return new Date(b.date) - new Date(a.date);
-            case 'duration':
-                return parseInt(a.duration) - parseInt(b.duration);
-            default:
-                return 0;
-        }
-    });
+// ─── Progress helpers (localStorage) ──────────────────────
+// (Progress helpers removed)
 
-    const getLevelBadge = (level) => {
-        const styles = {
-            beginner: 'bg-green-500/20 text-green-400 border-green-500/30',
-            intermediate: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
-            advanced: 'bg-red-500/20 text-red-400 border-red-500/30'
-        };
-        const labels = {
-            beginner: 'مبتدئ',
-            intermediate: 'متوسط',
-            advanced: 'متقدم'
-        };
-        return (
-            <span className={`px-3 py-1 rounded-full text-xs font-bold border ${styles[level]}`}>
-                {labels[level]}
-            </span>
-        );
-    };
 
-    const getTypeIcon = (type) => {
-        const icons = {
-            video: PlayCircle,
-            article: FileText,
-            interactive: Target
-        };
-        return icons[type] || FileText;
-    };
+// ─── Track Card ───────────────────────────────────────────
+function TrackCard({ track, onClick, enrolled, completedLessons = [] }) {
+    const Icon = ICON_MAP[track.icon] || Shield;
+    const totalLessons = track.courses?.reduce((a, c) => a + (c.units?.reduce((b, u) => b + (u.lessons?.length || 0), 0) || 0), 0) || 0;
+    const totalXP = track.courses?.reduce((a, c) => a + (c.units?.reduce((b, u) => b + (u.lessons?.reduce((x, l) => x + (l.xp_reward || 0), 0) || 0), 0) || 0), 0) || 0;
 
-    const handleLessonInteraction = (lesson, action) => {
-        switch (action) {
-            case 'view':
-                console.log(`Viewing lesson: ${lesson.title}`);
-                break;
-            case 'like':
-                console.log(`Liking lesson: ${lesson.title}`);
-                break;
-            case 'bookmark':
-                console.log(`Bookmarking lesson: ${lesson.title}`);
-                break;
-            case 'share':
-                console.log(`Sharing lesson: ${lesson.title}`);
-                break;
+    // Calculate progress if enrolled
+    const completedCount = track.courses?.reduce((a, c) => a + (c.units?.reduce((b, u) => b + (u.lessons?.filter(l => completedLessons.includes(l.id))?.length || 0), 0) || 0), 0) || 0;
+    const progress = totalLessons ? Math.round((completedCount / totalLessons) * 100) : 0;
+
+    const handleEnroll = async (e) => {
+        e.stopPropagation();
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) return alert('يجب تسجيل يالدخول أولاً');
+
+            await lmsAPI.enroll({ type: 'track', itemId: track.id });
+            // Reload page to refresh state (simple solution)
+            window.location.reload();
+        } catch (error) {
+            console.error(error);
+            alert(`فشل التسجيل: ${error.message}`);
         }
     };
 
     return (
-        <div className="min-h-screen bg-[#050214] text-white font-cairo" dir="rtl">
-            <MatrixBackground />
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+            onClick={enrolled ? () => onClick(track) : undefined}
+            className={`bg-[#12122a] border ${enrolled ? 'border-purple-500/50' : 'border-[#1f1f3d]'} rounded-2xl p-6 cursor-pointer hover:border-purple-500/50 transition-all group relative overflow-hidden`}>
+            <div className="absolute inset-0 bg-gradient-to-br from-purple-600/5 to-pink-600/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+            <div className="relative z-10">
+                <div className="flex items-start justify-between mb-4">
+                    <div className="p-3 bg-gradient-to-br from-purple-600/20 to-pink-600/10 rounded-xl border border-purple-500/20">
+                        <Icon size={28} className="text-purple-400" />
+                    </div>
+                    {enrolled && progress > 0 && (
+                        <span className="text-xs font-bold text-green-400 bg-green-400/10 px-2 py-1 rounded-full">{progress}%</span>
+                    )}
+                </div>
+                <h3 className="text-lg font-bold text-white mb-2 group-hover:text-purple-300 transition-colors">{track.title}</h3>
+                <p className="text-sm text-gray-400 mb-4 line-clamp-2">{track.description}</p>
+
+                <div className="flex justify-between items-center mt-4">
+                    <div className="flex gap-3 text-xs">
+                        <span className="bg-purple-600/20 text-purple-400 px-2 py-1 rounded border border-purple-600/20">{totalLessons} درس</span>
+                        <span className="bg-yellow-600/20 text-yellow-400 px-2 py-1 rounded border border-yellow-600/20">{totalXP} XP</span>
+                    </div>
+
+                    {!enrolled ? (
+                        <button onClick={handleEnroll} className="px-4 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-lg transition-colors z-20">
+                            تسجيل الآن
+                        </button>
+                    ) : (
+                        <span className="text-xs font-bold text-green-400 flex items-center gap-1">
+                            <CheckCircle size={14} /> مسجل
+                        </span>
+                    )}
+                </div>
+
+                {enrolled && progress > 0 && (
+                    <div className="mt-3 w-full bg-white/10 rounded-full h-1.5">
+                        <div className="bg-gradient-to-r from-purple-500 to-pink-500 h-1.5 rounded-full transition-all" style={{ width: `${progress}%` }} />
+                    </div>
+                )}
+            </div>
+        </motion.div>
+    );
+}
+
+// ─── Recorded Course Card ─────────────────────────────────
+function CourseCard({ course }) {
+    const [expanded, setExpanded] = useState(false);
+    return (
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+            className="bg-[#12122a] border border-[#1f1f3d] rounded-xl overflow-hidden hover:border-blue-500/30 transition-all">
+            <div className="h-40 bg-gradient-to-br from-blue-600/20 to-cyan-600/10 flex items-center justify-center relative">
+                {course.thumbnail_url ? <img src={course.thumbnail_url} alt="" className="w-full h-full object-cover" />
+                    : <Video size={40} className="text-blue-400" />}
+                {course.duration && (
+                    <span className="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded flex items-center gap-1">
+                        <Clock size={10} /> {course.duration}
+                    </span>
+                )}
+            </div>
+            <div className="p-4">
+                <h3 className="font-bold text-white mb-1">{course.title}</h3>
+                {course.instructor && <p className="text-xs text-gray-400 flex items-center gap-1 mb-2"><User size={12} /> {course.instructor}</p>}
+                <p className="text-sm text-gray-400 line-clamp-2">{course.description}</p>
+                {course.video_url && (
+                    <button onClick={() => setExpanded(!expanded)}
+                        className="mt-3 flex items-center gap-1 text-sm text-blue-400 hover:text-blue-300 font-bold">
+                        <Play size={14} /> {expanded ? 'إخفاء' : 'مشاهدة'}
+                    </button>
+                )}
+                {expanded && course.video_url && (
+                    <div className="mt-3 rounded-lg overflow-hidden border border-white/10">
+                        {course.video_url.includes('youtube') || course.video_url.includes('youtu.be') ? (
+                            <iframe src={course.video_url.replace('watch?v=', 'embed/')} className="w-full aspect-video" allowFullScreen />
+                        ) : (
+                            <video src={course.video_url} controls className="w-full aspect-video" />
+                        )}
+                    </div>
+                )}
+            </div>
+        </motion.div>
+    );
+}
+
+// ─── Article Card ─────────────────────────────────────────
+function ArticleCard({ article, onClick }) {
+    const [liked, setLiked] = useState(() => {
+        try { return JSON.parse(localStorage.getItem('article_likes') || '[]').includes(article.id); } catch { return false; }
+    });
+    const [saved, setSaved] = useState(() => {
+        try { return JSON.parse(localStorage.getItem('article_saves') || '[]').includes(article.id); } catch { return false; }
+    });
+
+    const toggleLike = (e) => {
+        e.stopPropagation();
+        const arr = JSON.parse(localStorage.getItem('article_likes') || '[]');
+        const next = liked ? arr.filter(id => id !== article.id) : [...arr, article.id];
+        localStorage.setItem('article_likes', JSON.stringify(next));
+        setLiked(!liked);
+    };
+
+    const toggleSave = (e) => {
+        e.stopPropagation();
+        const arr = JSON.parse(localStorage.getItem('article_saves') || '[]');
+        const next = saved ? arr.filter(id => id !== article.id) : [...arr, article.id];
+        localStorage.setItem('article_saves', JSON.stringify(next));
+        setSaved(!saved);
+    };
+
+    const handleShare = (e) => {
+        e.stopPropagation();
+        if (navigator.share) {
+            navigator.share({ title: article.title, text: article.description, url: window.location.href });
+        } else {
+            navigator.clipboard.writeText(window.location.href);
+            alert('تم نسخ الرابط');
+        }
+    };
+
+    return (
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+            onClick={onClick}
+            className="bg-[#12122a] border border-[#1f1f3d] rounded-xl overflow-hidden hover:border-orange-500/30 transition-all cursor-pointer group">
+            {article.cover_image && (
+                <img
+                    src={article.cover_image.startsWith('http') ? article.cover_image : `${BASE_URL}${article.cover_image}`}
+                    alt={article.title}
+                    className="w-full h-36 object-cover"
+                />
+            )}
+            <div className="p-4">
+                <h3 className="font-bold text-white mb-1 group-hover:text-orange-300 transition-colors">{article.title}</h3>
+                <p className="text-sm text-gray-400 line-clamp-2 mb-3">{article.description}</p>
+                <div className="flex items-center justify-between text-xs text-gray-500">
+                    <span className="flex items-center gap-1"><User size={12} /> {article.author || 'غير محدد'}</span>
+                    <span className="flex items-center gap-1"><Clock size={12} /> {article.read_time || 5} دقيقة</span>
+                </div>
+                {/* Interaction buttons */}
+                <div className="flex items-center gap-3 mt-3 pt-3 border-t border-[#1f1f3d]">
+                    <button onClick={toggleLike}
+                        className={`flex items-center gap-1 text-xs transition-all ${liked ? 'text-red-400' : 'text-gray-500 hover:text-red-400'}`}>
+                        <Heart size={14} className={liked ? 'fill-current' : ''} />
+                        <span>إعجاب</span>
+                    </button>
+                    <button onClick={toggleSave}
+                        className={`flex items-center gap-1 text-xs transition-all ${saved ? 'text-yellow-400' : 'text-gray-500 hover:text-yellow-400'}`}>
+                        <Bookmark size={14} className={saved ? 'fill-current' : ''} />
+                        <span>حفظ</span>
+                    </button>
+                    <button onClick={handleShare}
+                        className="flex items-center gap-1 text-xs text-gray-500 hover:text-blue-400 transition-all">
+                        <Share2 size={14} />
+                        <span>مشاركة</span>
+                    </button>
+                </div>
+            </div>
+        </motion.div>
+    );
+}
+
+// ─── Collapsible Unit (with lock/progress) ────────────────
+function CollapsibleUnit({ unit, unitIndex, onLessonSelect, completedLessons }) {
+    const [open, setOpen] = useState(unitIndex === 0);
+    const totalL = unit.lessons?.length || 0;
+    const doneL = unit.lessons?.filter(l => completedLessons.includes(l.id))?.length || 0;
+    const pct = totalL ? Math.round((doneL / totalL) * 100) : 0;
+
+    return (
+        <div className="bg-[#12122a] border border-[#1f1f3d] rounded-xl overflow-hidden">
+            <button onClick={() => setOpen(!open)}
+                className="w-full flex items-center justify-between px-4 py-3 hover:bg-white/5 transition-colors">
+                <div className="flex items-center gap-3">
+                    {open ? <ChevronDown size={16} className="text-purple-400" /> : <ChevronRight size={16} className="text-gray-500" />}
+                    <div className="w-2 h-2 rounded-full bg-purple-500" />
+                    <span className="font-bold text-sm text-gray-200">{unit.title}</span>
+                </div>
+                <div className="flex items-center gap-3">
+                    <span className="text-xs text-gray-500">{doneL}/{totalL}</span>
+                    <div className="w-16 bg-white/10 rounded-full h-1.5">
+                        <div className="bg-gradient-to-r from-green-500 to-emerald-400 h-1.5 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                    </div>
+                </div>
+            </button>
+            <AnimatePresence>
+                {open && (
+                    <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }}
+                        className="overflow-hidden">
+                        <div className="p-2 space-y-0.5 border-t border-[#1f1f3d]">
+                            {unit.lessons?.map((lesson, li) => {
+                                const isDone = completedLessons.includes(lesson.id);
+                                const prevDone = li === 0 || completedLessons.includes(unit.lessons[li - 1]?.id);
+                                const isLocked = li > 0 && !prevDone;
+
+                                return (
+                                    <button key={lesson.id}
+                                        onClick={() => !isLocked && onLessonSelect(lesson)}
+                                        disabled={isLocked}
+                                        className={`w-full flex items-center justify-between p-3 rounded-lg text-right transition-all ${isLocked ? 'opacity-40 cursor-not-allowed' : 'hover:bg-white/5 cursor-pointer'
+                                            }`}>
+                                        <div className="flex items-center gap-3">
+                                            <div className={`p-1.5 rounded-md ${isDone ? 'bg-green-500/20' : isLocked ? 'bg-gray-800' : 'bg-[#1f1f3d]'}`}>
+                                                {isDone ? <CheckCircle size={14} className="text-green-400" />
+                                                    : isLocked ? <Lock size={14} className="text-gray-600" />
+                                                        : <Play size={14} className="text-gray-400 fill-current" />}
+                                            </div>
+                                            <span className={`text-sm ${isDone ? 'text-green-400' : isLocked ? 'text-gray-600' : 'text-gray-300'}`}>
+                                                {lesson.title}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            {lesson.xp_reward > 0 && (
+                                                <span className="text-xs font-mono text-yellow-500 bg-yellow-500/10 px-2 py-0.5 rounded">{lesson.xp_reward} XP</span>
+                                            )}
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
+    );
+}
+
+// ═══════════════════════════════════════════════════════════
+//  MAIN: KnowledgeBase
+// ═══════════════════════════════════════════════════════════
+export default function KnowledgeBase() {
+    const { "*": param } = useParams();
+    const trackIdFromUrl = param ? parseInt(param.split('/')[0]) : null;
+
+    const [activeTab, setActiveTab] = useState('tracks');
+    const [syllabus, setSyllabus] = useState([]);
+    const [recordedCourses, setRecordedCourses] = useState([]);
+    const [articles, setArticles] = useState([]);
+    const [tags, setTags] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [selectedTrack, setSelectedTrack] = useState(null);
+    const [selectedLesson, setSelectedLesson] = useState(null);
+    const [selectedArticle, setSelectedArticle] = useState(null);
+    const [activeTag, setActiveTag] = useState(null);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [completedLessons, setCompletedLessons] = useState([]);
+    const [enrollments, setEnrollments] = useState([]);
+
+    useEffect(() => {
+        setIsLoading(true);
+        Promise.all([
+            lmsAPI.getSyllabus().catch(() => []),
+            lmsAPI.getRecordedCourses().catch(() => []),
+            lmsAPI.getArticles().catch(() => []),
+            lmsAPI.getTags().catch(() => []),
+        ]).then(([syl, rc, art, tgs]) => {
+            const syllabusData = Array.isArray(syl) ? syl : [];
+            setSyllabus(syllabusData);
+            setRecordedCourses(Array.isArray(rc) ? rc : []);
+            setArticles(Array.isArray(art) ? art : []);
+            setTags(Array.isArray(tgs) ? tgs : []);
+
+            if (trackIdFromUrl) {
+                const foundTrack = syllabusData.find(t => t.id === trackIdFromUrl);
+                if (foundTrack) setSelectedTrack(foundTrack);
+            }
+        }).finally(() => setIsLoading(false));
+
+        // Fetch enrollments
+        const token = localStorage.getItem('token');
+        if (token) {
+            axios.get('http://localhost:5000/api/auth/profile', {
+                headers: { Authorization: `Bearer ${token}` }
+            })
+                .then(res => {
+                    const trackIds = res.data.enrollments
+                        ?.filter(e => e.type === 'track')
+                        .map(e => Number(e.item_id)) || [];
+                    setEnrollments(trackIds);
+                })
+                .catch(err => console.error(err));
+
+            // Fetch completed lessons
+            lmsAPI.getCompletedLessons()
+                .then(ids => setCompletedLessons(ids))
+                .catch(err => console.error('Failed to fetch progress:', err));
+        }
+    }, [trackIdFromUrl]);
+
+    // (Duplicate useEffect removed)
+
+    const handleLessonComplete = () => {
+        if (selectedLesson) {
+            lmsAPI.markLessonComplete(selectedLesson.id)
+                .then(() => {
+                    setCompletedLessons(prev => [...prev, selectedLesson.id]);
+                    alert(`أحسنت! أكملت الدرس وحصلت على ${selectedLesson.xp_reward || 10} XP`);
+                })
+                .catch(err => {
+                    console.error('Lesson completion error:', err);
+                    alert(`خطأ في حفظ التقدم: ${err.response?.data?.error || err.message}`);
+                });
+        }
+    };
+
+    const filteredTracks = syllabus.filter(t =>
+        !searchQuery || t.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        t.description?.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+
+    const TABS = [
+        { id: 'tracks', label: 'المسارات والدروس', icon: BookOpen },
+        { id: 'recorded', label: 'الدورات المسجلة', icon: Video },
+        { id: 'articles', label: 'المقالات', icon: FileText },
+    ];
+
+    // ─── Level 3: Lesson Viewer ───
+    if (selectedLesson) {
+        // Find the course containing this lesson for sidebar navigation
+        let currentCourse = null;
+        if (selectedTrack) {
+            for (const course of selectedTrack.courses || []) {
+                for (const unit of course.units || []) {
+                    if ((unit.lessons || []).some(l => l.id === selectedLesson.id)) {
+                        currentCourse = course;
+                        break;
+                    }
+                }
+                if (currentCourse) break;
+            }
+        }
+
+        return (
+            <LessonViewer
+                lesson={selectedLesson}
+                course={currentCourse}
+                completedLessons={completedLessons}
+                onBack={() => setSelectedLesson(null)}
+                onSelectLesson={(lesson) => setSelectedLesson(lesson)}
+                onComplete={() => {
+                    handleLessonComplete();
+                    // Find next lesson
+                    if (selectedTrack) {
+                        for (const course of selectedTrack.courses || []) {
+                            for (const unit of course.units || []) {
+                                const lessons = unit.lessons || [];
+                                const idx = lessons.findIndex(l => l.id === selectedLesson.id);
+                                if (idx >= 0 && idx < lessons.length - 1) {
+                                    setSelectedLesson(lessons[idx + 1]);
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                    setSelectedLesson(null);
+                }}
+            />
+        );
+    }
+
+    // ─── Level 3: Article Viewer ───
+    if (selectedArticle) {
+        const artLiked = (() => { try { return JSON.parse(localStorage.getItem('article_likes') || '[]').includes(selectedArticle.id); } catch { return false; } })();
+        const artSaved = (() => { try { return JSON.parse(localStorage.getItem('article_saves') || '[]').includes(selectedArticle.id); } catch { return false; } })();
+
+        const toggleArtLike = () => {
+            const arr = JSON.parse(localStorage.getItem('article_likes') || '[]');
+            const next = artLiked ? arr.filter(id => id !== selectedArticle.id) : [...arr, selectedArticle.id];
+            localStorage.setItem('article_likes', JSON.stringify(next));
+            setSelectedArticle({ ...selectedArticle }); // trigger re-render
+        };
+        const toggleArtSave = () => {
+            const arr = JSON.parse(localStorage.getItem('article_saves') || '[]');
+            const next = artSaved ? arr.filter(id => id !== selectedArticle.id) : [...arr, selectedArticle.id];
+            localStorage.setItem('article_saves', JSON.stringify(next));
+            setSelectedArticle({ ...selectedArticle });
+        };
+        const shareArt = () => {
+            if (navigator.share) navigator.share({ title: selectedArticle.title, text: selectedArticle.description, url: window.location.href });
+            else { navigator.clipboard.writeText(window.location.href); alert('تم نسخ الرابط'); }
+        };
+
+        return (
+            <div className="min-h-screen bg-[#05050f]" dir="rtl">
+                <nav className="sticky top-0 z-50 bg-[#12122a]/90 backdrop-blur border-b border-[#1f1f3d] px-6 py-3 flex items-center justify-between">
+                    <button onClick={() => setSelectedArticle(null)}
+                        className="flex items-center text-gray-400 hover:text-white transition-colors text-sm">
+                        <ChevronRight size={18} className="ml-1" /> عودة للمقالات
+                    </button>
+                    <span className="text-white font-bold text-sm">{selectedArticle.title}</span>
+                    <div className="flex items-center gap-2">
+                        <button onClick={toggleArtLike} className={`p-2 rounded-lg transition-all ${artLiked ? 'text-red-400 bg-red-500/10' : 'text-gray-400 hover:text-red-400'}`}>
+                            <Heart size={16} className={artLiked ? 'fill-current' : ''} />
+                        </button>
+                        <button onClick={toggleArtSave} className={`p-2 rounded-lg transition-all ${artSaved ? 'text-yellow-400 bg-yellow-500/10' : 'text-gray-400 hover:text-yellow-400'}`}>
+                            <Bookmark size={16} className={artSaved ? 'fill-current' : ''} />
+                        </button>
+                        <button onClick={shareArt} className="p-2 rounded-lg text-gray-400 hover:text-blue-400 transition-all">
+                            <Share2 size={16} />
+                        </button>
+                    </div>
+                </nav>
+                {/* Hero Image */}
+                {selectedArticle.cover_image && (
+                    <div className="w-full h-64 md:h-80 relative">
+                        <div className="absolute inset-0 bg-gradient-to-t from-[#05050f] via-[#05050f]/50 to-transparent z-10" />
+                        <img
+                            src={selectedArticle.cover_image.startsWith('http') ? selectedArticle.cover_image : `${BASE_URL}${selectedArticle.cover_image}`}
+                            alt={selectedArticle.title}
+                            className="w-full h-full object-cover"
+                        />
+                        <div className="absolute bottom-0 right-0 w-full p-6 z-20 max-w-3xl mx-auto">
+                            <h1 className="text-3xl md:text-4xl font-bold text-white mb-2 shadow-black drop-shadow-lg">{selectedArticle.title}</h1>
+                        </div>
+                    </div>
+                )}
+
+                {/* Article Content */}
+                <div className="max-w-3xl mx-auto px-6 py-8 relative z-20">
+                    {/* Author & meta */}
+                    <div className="flex items-center gap-3 mb-6 pb-4 border-b border-[#1f1f3d]">
+                        <div className="w-10 h-10 bg-orange-500/20 rounded-full flex items-center justify-center">
+                            <User size={18} className="text-orange-400" />
+                        </div>
+                        <div>
+                            <p className="text-white font-bold text-sm">{selectedArticle.author || 'غير محدد'}</p>
+                            <p className="text-xs text-gray-500 flex items-center gap-2">
+                                <Clock size={12} /> {selectedArticle.read_time || 5} دقيقة قراءة
+                            </p>
+                        </div>
+                    </div>
+                    {/* Markdown body - Obsidian Theme */}
+                    <div className="obs-prose max-w-none">
+                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                            {selectedArticle.content || ''}
+                        </ReactMarkdown>
+                    </div>
+                    {/* Bottom actions */}
+                    <div className="flex items-center justify-between mt-10 pt-6 border-t border-[#1f1f3d]">
+                        <div className="flex items-center gap-4">
+                            <button onClick={toggleArtLike}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${artLiked ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-white/5 text-gray-400 border border-white/10 hover:bg-red-500/10 hover:text-red-400'}`}>
+                                <Heart size={16} className={artLiked ? 'fill-current' : ''} /> إعجاب
+                            </button>
+                            <button onClick={toggleArtSave}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${artSaved ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' : 'bg-white/5 text-gray-400 border border-white/10 hover:bg-yellow-500/10 hover:text-yellow-400'}`}>
+                                <Bookmark size={16} className={artSaved ? 'fill-current' : ''} /> حفظ
+                            </button>
+                            <button onClick={shareArt}
+                                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold bg-white/5 text-gray-400 border border-white/10 hover:bg-blue-500/10 hover:text-blue-400 transition-all">
+                                <Share2 size={16} /> مشاركة
+                            </button>
+                        </div>
+                        <button onClick={() => setSelectedArticle(null)}
+                            className="text-sm text-gray-500 hover:text-white transition-colors">
+                            عودة للمقالات →
+                        </button>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="min-h-screen bg-[#05050f] text-white font-cairo" dir="rtl">
+            {/* Background */}
+            <div className="fixed inset-0 pointer-events-none">
+                <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-purple-900/10 rounded-full blur-[100px] -translate-y-1/2 translate-x-1/2" />
+                <div className="absolute bottom-0 left-0 w-[500px] h-[500px] bg-blue-900/10 rounded-full blur-[100px] translate-y-1/2 -translate-x-1/2" />
+            </div>
 
             {/* Header */}
             <div className="relative z-10 border-b border-white/10 bg-[#0a0a0f]/80 backdrop-blur-md">
                 <div className="max-w-7xl mx-auto px-6 py-6">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
-                            <div className="p-3 bg-[#7112AF]/20 rounded-lg">
-                                <BookOpen className="text-[#7112AF]" size={28} />
+                            <div className="p-3 bg-gradient-to-br from-purple-600 to-pink-600 rounded-xl shadow-[0_0_30px_rgba(113,18,175,0.3)]">
+                                <BookOpen size={28} className="text-white" />
                             </div>
                             <div>
                                 <h1 className="text-3xl font-bold text-white">قاعدة المعرفة</h1>
-                                <p className="text-gray-400">عقل المنصة المركزي للتعلم السيبراني</p>
+                                <p className="text-gray-400 text-sm">تعلم، تدرب، واحترف الأمن السيبراني</p>
                             </div>
                         </div>
-                        
-                        <div className="flex items-center gap-4">
-                            <div className="flex items-center gap-2 text-sm">
-                                <Brain className="text-purple-400" size={20} />
-                                <span className="text-purple-400">{LESSONS.length} درس</span>
-                            </div>
-                            <div className="flex items-center gap-2 text-sm">
-                                <Users className="text-blue-400" size={20} />
-                                <span className="text-blue-400">2.3K طالب</span>
-                            </div>
+                        <div className="relative w-72">
+                            <Filter className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
+                            <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
+                                placeholder="بحث..."
+                                className="w-full pr-10 pl-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500" />
                         </div>
                     </div>
                 </div>
             </div>
 
-            <div className="relative z-10">
-                {/* Categories */}
-                <div className="max-w-7xl mx-auto px-6 py-8">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
-                        <motion.button
-                            whileHover={{ scale: 1.05 }}
-                            onClick={() => setSelectedCategory('all')}
-                            className={`p-6 rounded-xl border transition-all duration-300 ${
-                                selectedCategory === 'all'
-                                    ? 'bg-gradient-to-br from-[#7112AF]/20 to-[#ff006e]/20 border-[#7112AF]/50'
-                                    : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20'
-                            }`}
-                        >
-                            <div className="text-center">
-                                <div className="w-12 h-12 bg-gradient-to-br from-[#7112AF] to-[#ff006e] rounded-lg flex items-center justify-center mx-auto mb-3">
-                                    <BookOpen className="text-white" size={24} />
-                                </div>
-                                <h3 className="font-bold text-white mb-1">جميع الدروس</h3>
-                                <p className="text-sm text-gray-400">{LESSONS.length} درس</p>
-                            </div>
-                        </motion.button>
-
-                        {KNOWLEDGE_CATEGORIES.map((category, index) => {
-                            const Icon = category.icon;
+            {/* Tabs (ClubActivities-inspired) */}
+            <div className="relative z-10 border-b border-white/10">
+                <div className="max-w-7xl mx-auto px-6">
+                    <div className="flex gap-2">
+                        {TABS.map(tab => {
+                            const Icon = tab.icon;
                             return (
-                                <motion.button
-                                    key={category.id}
-                                    whileHover={{ scale: 1.05 }}
-                                    onClick={() => setSelectedCategory(category.id)}
-                                    className={`p-6 rounded-xl border transition-all duration-300 ${
-                                        selectedCategory === category.id
-                                            ? `${category.bg} border-current/50`
-                                            : 'bg-white/5 border-white/10 hover:bg-white/10 hover:border-white/20'
-                                    }`}
-                                >
-                                    <div className="text-center">
-                                        <div className={`w-12 h-12 ${category.bg} rounded-lg flex items-center justify-center mx-auto mb-3`}>
-                                            <Icon className={category.color} size={24} />
-                                        </div>
-                                        <h3 className="font-bold text-white mb-1">{category.title}</h3>
-                                        <p className="text-xs text-gray-400 mb-2">{category.desc}</p>
-                                        <div className="w-full bg-white/10 rounded-full h-2">
-                                            <div 
-                                                className="bg-gradient-to-r from-[#7112AF] to-[#ff006e] h-2 rounded-full transition-all duration-500"
-                                                style={{ width: `${category.progress}%` }}
-                                            />
-                                        </div>
-                                        <p className="text-xs text-gray-400 mt-1">{category.count} درس</p>
-                                    </div>
-                                </motion.button>
+                                <button key={tab.id}
+                                    onClick={() => { setActiveTab(tab.id); setSelectedTrack(null); }}
+                                    className={`flex items-center gap-2 px-6 py-4 font-bold transition-colors border-b-2 ${activeTab === tab.id
+                                        ? 'text-purple-400 border-purple-500'
+                                        : 'text-gray-400 border-transparent hover:text-white'
+                                        }`}>
+                                    <Icon size={18} /> {tab.label}
+                                </button>
                             );
                         })}
                     </div>
                 </div>
+            </div>
 
-                {/* Search and Filters */}
-                <div className="max-w-7xl mx-auto px-6 pb-6">
-                    <div className="bg-white/5 border border-white/10 rounded-xl p-6">
-                        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                            <div className="relative">
-                                <Search className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-                                <input
-                                    type="text"
-                                    placeholder="البحث في الدروس..."
-                                    value={searchTerm}
-                                    onChange={(e) => setSearchTerm(e.target.value)}
-                                    className="w-full pr-12 pl-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#7112AF] transition-colors"
-                                />
-                            </div>
-
-                            <select
-                                value={filterLevel}
-                                onChange={(e) => setFilterLevel(e.target.value)}
-                                className="px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-[#7112AF] transition-colors"
-                            >
-                                <option value="all">جميع المستويات</option>
-                                <option value="beginner">مبتدئ</option>
-                                <option value="intermediate">متوسط</option>
-                                <option value="advanced">متقدم</option>
-                            </select>
-
-                            <select
-                                value={filterType}
-                                onChange={(e) => setFilterType(e.target.value)}
-                                className="px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-[#7112AF] transition-colors"
-                            >
-                                <option value="all">جميع الأنواع</option>
-                                <option value="video">فيديو</option>
-                                <option value="article">مقال</option>
-                                <option value="interactive">تفاعلي</option>
-                            </select>
-
-                            <select
-                                value={sortBy}
-                                onChange={(e) => setSortBy(e.target.value)}
-                                className="px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-[#7112AF] transition-colors"
-                            >
-                                <option value="trending">الأكثر مشاهدة</option>
-                                <option value="rating">الأعلى تقييماً</option>
-                                <option value="recent">الأحدث</option>
-                                <option value="duration">الأقصر</option>
-                            </select>
-
-                            <div className="flex gap-2">
-                                <button
-                                    onClick={() => setViewMode('grid')}
-                                    className={`flex-1 px-4 py-3 rounded-lg transition-colors ${
-                                        viewMode === 'grid' 
-                                            ? 'bg-[#7112AF]/20 text-[#7112AF]' 
-                                            : 'bg-white/10 text-gray-400 hover:bg-white/20'
+            {/* Tag Filter Bar */}
+            {tags.length > 0 && (
+                <div className="relative z-10 border-b border-white/5">
+                    <div className="max-w-7xl mx-auto px-6 py-3 flex gap-2 overflow-x-auto">
+                        <button onClick={() => setActiveTag(null)}
+                            className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap transition-colors ${!activeTag ? 'bg-purple-600/20 text-purple-400 border border-purple-500/30' : 'bg-white/5 text-gray-400 hover:bg-white/10'
+                                }`}>الكل</button>
+                        {tags.map(tag => (
+                            <button key={tag.id} onClick={() => setActiveTag(tag.name)}
+                                className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap transition-colors flex items-center gap-1 ${activeTag === tag.name ? 'border' : 'bg-white/5 text-gray-400 hover:bg-white/10'
                                     }`}
-                                >
-                                    <div className="grid grid-cols-2 gap-1 mx-auto">
-                                        <div className="w-1 h-1 bg-current rounded"></div>
-                                        <div className="w-1 h-1 bg-current rounded"></div>
-                                        <div className="w-1 h-1 bg-current rounded"></div>
-                                        <div className="w-1 h-1 bg-current rounded"></div>
-                                    </div>
-                                </button>
-                                <button
-                                    onClick={() => setViewMode('list')}
-                                    className={`flex-1 px-4 py-3 rounded-lg transition-colors ${
-                                        viewMode === 'list' 
-                                            ? 'bg-[#7112AF]/20 text-[#7112AF]' 
-                                            : 'bg-white/10 text-gray-400 hover:bg-white/20'
-                                    }`}
-                                >
-                                    <div className="space-y-1">
-                                        <div className="w-4 h-0.5 bg-current rounded"></div>
-                                        <div className="w-4 h-0.5 bg-current rounded"></div>
-                                        <div className="w-4 h-0.5 bg-current rounded"></div>
-                                    </div>
-                                </button>
-                            </div>
-                        </div>
+                                style={activeTag === tag.name ? { backgroundColor: tag.color + '20', borderColor: tag.color + '40', color: tag.color } : {}}>
+                                <Hash size={10} /> {tag.name}
+                            </button>
+                        ))}
                     </div>
                 </div>
+            )}
 
-                {/* Lessons Grid/List */}
-                <div className="max-w-7xl mx-auto px-6 pb-12">
-                    {viewMode === 'grid' ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                            {filteredLessons.map((lesson, index) => {
-                                const TypeIcon = getTypeIcon(lesson.type);
-                                return (
-                                    <motion.div
-                                        key={lesson.id}
-                                        initial={{ opacity: 0, y: 20 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        transition={{ delay: index * 0.1 }}
-                                        className="bg-white/5 border border-white/10 rounded-xl overflow-hidden hover:border-[#7112AF]/50 transition-all duration-300 group"
-                                    >
-                                        {/* Thumbnail */}
-                                        <div className="relative h-48 bg-gradient-to-br from-[#7112AF]/20 to-[#ff006e]/20 flex items-center justify-center">
-                                            <TypeIcon className="text-white/50" size={48} />
-                                            {lesson.completed && (
-                                                <div className="absolute top-3 right-3 w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
-                                                    <CheckCircle className="text-white" size={16} />
-                                                </div>
-                                            )}
-                                            <div className="absolute bottom-3 left-3 px-2 py-1 bg-black/50 backdrop-blur-sm rounded text-xs text-white">
-                                                {lesson.duration}
-                                            </div>
-                                        </div>
-
-                                        {/* Content */}
-                                        <div className="p-6">
-                                            <div className="flex items-center justify-between mb-3">
-                                                {getLevelBadge(lesson.level)}
-                                                <div className="flex items-center gap-1">
-                                                    <Star className="text-yellow-400 fill-yellow-400" size={14} />
-                                                    <span className="text-sm text-gray-300">{lesson.rating}</span>
-                                                </div>
-                                            </div>
-
-                                            <h3 className="font-bold text-white mb-2 line-clamp-2">{lesson.title}</h3>
-                                            <p className="text-gray-400 text-sm mb-4 line-clamp-2">{lesson.description}</p>
-
-                                            {/* Tags */}
-                                            <div className="flex flex-wrap gap-2 mb-4">
-                                                {lesson.tags.map((tag, tagIndex) => (
-                                                    <span key={tagIndex} className="px-2 py-1 bg-[#7112AF]/20 text-[#7112AF] rounded text-xs">
-                                                        #{tag}
-                                                    </span>
-                                                ))}
-                                            </div>
-
-                                            {/* Progress */}
-                                            {lesson.progress > 0 && lesson.progress < 100 && (
-                                                <div className="mb-4">
-                                                    <div className="flex items-center justify-between text-xs text-gray-400 mb-1">
-                                                        <span>التقدم</span>
-                                                        <span>{lesson.progress}%</span>
-                                                    </div>
-                                                    <div className="w-full bg-white/10 rounded-full h-2">
-                                                        <div 
-                                                            className="bg-gradient-to-r from-[#7112AF] to-[#ff006e] h-2 rounded-full transition-all duration-500"
-                                                            style={{ width: `${lesson.progress}%` }}
-                                                        />
-                                                    </div>
-                                                </div>
-                                            )}
-
-                                            {/* Meta */}
-                                            <div className="flex items-center justify-between text-xs text-gray-400 mb-4">
-                                                <div className="flex items-center gap-3">
-                                                    <span className="flex items-center gap-1">
-                                                        <Eye size={12} />
-                                                        {lesson.views}
-                                                    </span>
-                                                    <span className="flex items-center gap-1">
-                                                        <Heart size={12} />
-                                                        {lesson.likes}
-                                                    </span>
-                                                </div>
-                                                <span>{lesson.date}</span>
-                                            </div>
-
-                                            {/* Author */}
-                                            <div className="flex items-center justify-between mb-4">
-                                                <div className="flex items-center gap-2">
-                                                    <div className="w-8 h-8 bg-[#7112AF]/20 rounded-full flex items-center justify-center">
-                                                        <Users size={16} className="text-[#7112AF]" />
-                                                    </div>
-                                                    <span className="text-sm text-gray-300">{lesson.author}</span>
-                                                </div>
-                                            </div>
-
-                                            {/* Actions */}
-                                            <div className="flex gap-2">
-                                                <button
-                                                    onClick={() => handleLessonInteraction(lesson, 'view')}
-                                                    className="flex-1 px-4 py-2 bg-gradient-to-r from-[#7112AF] to-[#ff006e] text-white font-bold rounded-lg hover:shadow-[0_0_20px_rgba(113,18,175,0.5)] transition-all duration-300"
-                                                >
-                                                    {lesson.completed ? 'إعادة مشاهدة' : 'ابدأ الدرس'}
-                                                </button>
-                                                <button
-                                                    onClick={() => handleLessonInteraction(lesson, 'bookmark')}
-                                                    className="p-2 bg-white/10 rounded-lg hover:bg-white/20 transition-colors"
-                                                >
-                                                    <Bookmark size={16} className="text-gray-400" />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleLessonInteraction(lesson, 'share')}
-                                                    className="p-2 bg-white/10 rounded-lg hover:bg-white/20 transition-colors"
-                                                >
-                                                    <Share2 size={16} className="text-gray-400" />
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </motion.div>
-                                );
-                            })}
+            {/* Main Content */}
+            <div className="relative z-10 p-6">
+                <div className="max-w-7xl mx-auto">
+                    {isLoading ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {[1, 2, 3].map(i => <div key={i} className="h-64 bg-[#12122a] rounded-xl animate-pulse" />)}
                         </div>
                     ) : (
-                        <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
-                            <div className="overflow-x-auto">
-                                <table className="w-full">
-                                    <thead>
-                                        <tr className="border-b border-white/10">
-                                            <th className="px-6 py-4 text-right text-gray-400 font-bold">الدرس</th>
-                                            <th className="px-6 py-4 text-right text-gray-400 font-bold">المستوى</th>
-                                            <th className="px-6 py-4 text-right text-gray-400 font-bold">المدة</th>
-                                            <th className="px-6 py-4 text-right text-gray-400 font-bold">المشاهدات</th>
-                                            <th className="px-6 py-4 text-right text-gray-400 font-bold">التقييم</th>
-                                            <th className="px-6 py-4 text-right text-gray-400 font-bold">التقدم</th>
-                                            <th className="px-6 py-4 text-right text-gray-400 font-bold">الإجراءات</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {filteredLessons.map((lesson, index) => (
-                                            <motion.tr
-                                                key={lesson.id}
-                                                initial={{ opacity: 0, x: -20 }}
-                                                animate={{ opacity: 1, x: 0 }}
-                                                transition={{ delay: index * 0.05 }}
-                                                className="border-b border-white/5 hover:bg-white/5 transition-colors"
-                                            >
-                                                <td className="px-6 py-4">
-                                                    <div className="flex items-center gap-3">
-                                                        <div className="w-10 h-10 bg-gradient-to-br from-[#7112AF]/20 to-[#ff006e]/20 rounded-lg flex items-center justify-center">
-                                                            {getTypeIcon(lesson.type)({ size: 20, className: "text-white/50" })}
-                                                        </div>
-                                                        <div>
-                                                            <div className="font-bold text-white">{lesson.title}</div>
-                                                            <div className="text-sm text-gray-400">{lesson.author}</div>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4">{getLevelBadge(lesson.level)}</td>
-                                                <td className="px-6 py-4 text-white">{lesson.duration}</td>
-                                                <td className="px-6 py-4 text-white">{lesson.views.toLocaleString()}</td>
-                                                <td className="px-6 py-4">
-                                                    <div className="flex items-center gap-1">
-                                                        <Star className="text-yellow-400 fill-yellow-400" size={14} />
-                                                        <span className="text-white">{lesson.rating}</span>
-                                                    </div>
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    {lesson.completed ? (
-                                                        <div className="flex items-center gap-2">
-                                                            <CheckCircle className="text-green-400" size={16} />
-                                                            <span className="text-green-400">مكتمل</span>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="w-16 bg-white/10 rounded-full h-2">
-                                                            <div 
-                                                                className="bg-gradient-to-r from-[#7112AF] to-[#ff006e] h-2 rounded-full"
-                                                                style={{ width: `${lesson.progress}%` }}
-                                                            />
-                                                        </div>
-                                                    )}
-                                                </td>
-                                                <td className="px-6 py-4">
-                                                    <div className="flex items-center gap-2">
-                                                        <button
-                                                            onClick={() => handleLessonInteraction(lesson, 'view')}
-                                                            className="px-3 py-1 bg-[#7112AF]/20 text-[#7112AF] rounded-lg hover:bg-[#7112AF]/30 transition-colors text-sm"
-                                                        >
-                                                            {lesson.completed ? 'إعادة' : 'مشاهدة'}
-                                                        </button>
-                                                        <button
-                                                            onClick={() => handleLessonInteraction(lesson, 'bookmark')}
-                                                            className="p-1 bg-white/10 rounded-lg hover:bg-white/20 transition-colors"
-                                                        >
-                                                            <Bookmark size={14} className="text-gray-400" />
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </motion.tr>
+                        <AnimatePresence mode="wait">
+                            {/* ═══ TRACKS TAB ═══ */}
+                            {activeTab === 'tracks' && !selectedTrack && (
+                                <motion.div key="tracks-grid" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                        {filteredTracks.map(track => (
+                                            <TrackCard
+                                                key={track.id}
+                                                track={track}
+                                                onClick={setSelectedTrack}
+                                                enrolled={enrollments.includes(track.id)}
+                                                completedLessons={completedLessons}
+                                            />
                                         ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
+                                    </div>
+                                    {filteredTracks.length === 0 && (
+                                        <div className="text-center py-20 text-gray-500"><p className="text-lg">لا توجد مسارات حالياً</p></div>
+                                    )}
+                                </motion.div>
+                            )}
+
+                            {/* ═══ TRACK DETAIL ═══ */}
+                            {activeTab === 'tracks' && selectedTrack && (
+                                <motion.div key="track-detail" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0 }}>
+                                    <button onClick={() => setSelectedTrack(null)}
+                                        className="flex items-center text-gray-400 hover:text-white mb-6 group transition-colors">
+                                        <ChevronRight className="w-5 h-5 ml-2 group-hover:-translate-x-1 transition-transform" />
+                                        <span>عودة للمسارات</span>
+                                    </button>
+
+                                    {/* Track Header */}
+                                    <div className="bg-[#12122a] border border-[#1f1f3d] rounded-2xl p-6 mb-6">
+                                        <h2 className="text-2xl font-bold text-white mb-2">{selectedTrack.title}</h2>
+                                        <p className="text-gray-400 text-sm mb-4">{selectedTrack.description}</p>
+                                        {(() => {
+                                            const totalL = selectedTrack.courses?.reduce((a, c) => a + (c.units?.reduce((b, u) => b + (u.lessons?.length || 0), 0) || 0), 0) || 0;
+                                            const doneL = selectedTrack.courses?.reduce((a, c) => a + (c.units?.reduce((b, u) => b + (u.lessons?.filter(l => completedLessons.includes(l.id))?.length || 0), 0) || 0), 0) || 0;
+                                            const pct = totalL ? Math.round((doneL / totalL) * 100) : 0;
+                                            return (
+                                                <div className="flex items-center gap-4">
+                                                    <div className="flex-1 bg-white/10 rounded-full h-2.5">
+                                                        <div className="bg-gradient-to-r from-purple-500 to-pink-500 h-2.5 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                                                    </div>
+                                                    <span className="text-sm font-bold text-purple-400 whitespace-nowrap">{pct}% مكتمل</span>
+                                                </div>
+                                            );
+                                        })()}
+                                    </div>
+
+                                    {/* Courses > Units > Lessons */}
+                                    <div className="space-y-6">
+                                        {selectedTrack.courses?.map(course => (
+                                            <div key={course.id}>
+                                                <h3 className="text-lg font-bold text-cyan-400 mb-3 flex items-center gap-2">
+                                                    <BookOpen size={18} /> {course.title}
+                                                </h3>
+                                                <div className="space-y-2">
+                                                    {course.units?.map((unit, ui) => (
+                                                        <CollapsibleUnit key={unit.id} unit={unit} unitIndex={ui}
+                                                            onLessonSelect={(l) => { setSelectedLesson(l); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+                                                            completedLessons={completedLessons} />
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </motion.div>
+                            )}
+
+                            {/* ═══ RECORDED COURSES TAB ═══ */}
+                            {activeTab === 'recorded' && (
+                                <motion.div key="recorded" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                        {recordedCourses.map(c => <CourseCard key={c.id} course={c} />)}
+                                    </div>
+                                    {recordedCourses.length === 0 && (
+                                        <div className="text-center py-20 text-gray-500"><p className="text-lg">لا توجد دورات مسجلة حالياً</p></div>
+                                    )}
+                                </motion.div>
+                            )}
+
+                            {/* ═══ ARTICLES TAB ═══ */}
+                            {activeTab === 'articles' && (
+                                <motion.div key="articles" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                        {articles.map(a => <ArticleCard key={a.id} article={a} onClick={() => setSelectedArticle(a)} />)}
+                                    </div>
+                                    {articles.length === 0 && (
+                                        <div className="text-center py-20 text-gray-500"><p className="text-lg">لا توجد مقالات حالياً</p></div>
+                                    )}
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
                     )}
                 </div>
             </div>

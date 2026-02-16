@@ -1,119 +1,90 @@
 const { db } = require('../models/database');
 
-// Get all content (news, articles, etc.)
-exports.getAllContent = (req, res) => {
-    const { type, category, limit = 20, page = 1 } = req.query;
-    
-    let query = `
-        SELECT id, title, body, category, author, type, thumbnail, tags, 
-               views, likes, is_urgent, date_published, status
-        FROM content 
-        WHERE status = 'published'
-    `;
-    const params = [];
+// Content Management
 
-    if (type) {
-        query += ' AND type = ?';
-        params.push(type);
-    }
-
-    if (category) {
-        query += ' AND category = ?';
-        params.push(category);
-    }
-
-    query += ' ORDER BY date_published DESC LIMIT ? OFFSET ?';
-    params.push(parseInt(limit), (parseInt(page) - 1) * parseInt(limit));
-
-    db.all(query, params, (err, rows) => {
-        if (err) {
-            console.error('Get content error:', err);
-            return res.status(500).json({ error: 'Failed to fetch content' });
-        }
-
-        // Parse tags from JSON string
-        const content = rows.map(item => ({
-            ...item,
-            tags: JSON.parse(item.tags || '[]')
-        }));
-
-        res.json(content);
-    });
+const getAllContent = (req, res) => {
+    // Content table has been deprecated in favor of 'news' and 'lms' tables.
+    // Returning empty array to prevent SQL errors in legacy components.
+    res.json([]);
 };
 
-// Get single content by ID
-exports.getContentById = (req, res) => {
-    const { id } = req.params;
+const createContent = (req, res) => {
+    console.log('Create Content Request Body:', req.body);
+    console.log('Create Content File:', req.file);
 
-    db.get(
-        `SELECT id, title, body, category, author, type, thumbnail, tags, 
-                views, likes, is_urgent, date_published
-         FROM content 
-         WHERE id = ? AND status = 'published'`,
-        [id],
-        (err, row) => {
-            if (err) {
-                console.error('Get content error:', err);
-                return res.status(500).json({ error: 'Failed to fetch content' });
-            }
+    const { title, body, content: bodyAlt, type, category, image_url } = req.body;
 
-            if (!row) {
-                return res.status(404).json({ error: 'Content not found' });
-            }
+    // Accept either 'body' or 'content' from frontend
+    const bodyText = body || bodyAlt;
 
-            // Increment views
-            db.run('UPDATE content SET views = views + 1 WHERE id = ?', [id]);
+    // Construct Image URL
+    // If a file is uploaded via multer, req.file will be populated.
+    // If usage of image_url string is allowed (e.g. external link), we use that as fallback.
+    const thumbUrl = req.file ? `/uploads/${req.file.filename}` : (image_url || null);
 
-            res.json({
-                ...row,
-                tags: JSON.parse(row.tags || '[]')
-            });
-        }
-    );
-};
-
-// Create new content (admin only)
-exports.createContent = (req, res) => {
-    const { title, body, category, author, type = 'article', thumbnail, tags, is_urgent = false } = req.body;
-
-    if (!title || !body || !category) {
-        return res.status(400).json({ error: 'Title, body, and category are required' });
+    if (!title || !bodyText) {
+        return res.status(400).json({ error: 'Title and body are required' });
     }
 
-    const tagsJson = JSON.stringify(tags || []);
+    // Default to 'news' if type is missing
+    const contentType = type || 'news';
 
     db.run(
-        `INSERT INTO content (title, body, category, author, type, thumbnail, tags, is_urgent, status) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'published')`,
-        [title, body, category, author, type, thumbnail, tagsJson, is_urgent],
-        function(err) {
+        `INSERT INTO content (title, body, type, category, thumbnail, author, status) 
+         VALUES (?, ?, ?, ?, ?, ?, 'published')`,
+        [title, bodyText, contentType, category || 'general', thumbUrl, req.user?.username || 'Admin'],
+        function (err) {
             if (err) {
                 console.error('Create content error:', err);
                 return res.status(500).json({ error: 'Failed to create content' });
             }
 
+            const contentId = this.lastID;
+
+            // Log the action
+            db.run(
+                `INSERT INTO logs (user_id, action, resource_type, resource_id, details, ip_address) 
+                 VALUES (?, ?, 'content', ?, ?, ?)`,
+                [req.user?.id || 0, 'CONTENT_CREATED', contentId, `Created ${contentType}: ${title}`, req.ip || 'unknown']
+            );
+
             res.status(201).json({
                 message: 'Content created successfully',
-                id: this.lastID
+                id: contentId,
+                thumbnail: thumbUrl,
+                // Return matched fields for frontend convenience
+                title,
+                body: bodyText,
+                type: contentType
             });
         }
     );
 };
 
-// Update content (admin only)
-exports.updateContent = (req, res) => {
+const updateContent = (req, res) => {
     const { id } = req.params;
-    const { title, body, category, author, thumbnail, tags, is_urgent, status } = req.body;
+    const { title, body, content: bodyAlt, category, image_url } = req.body;
 
-    const tagsJson = JSON.stringify(tags || []);
+    const bodyText = body || bodyAlt;
+    // If a new file is uploaded, use it. Otherwise use the provided image_url (which might be the existing one)
+    let thumbUrl = req.file ? `/uploads/${req.file.filename}` : (image_url || null);
+
+    // Construct the SQL query dynamically based on whether thumbnail is being updated
+    let query = `UPDATE content SET title = ?, body = ?, category = ?, date_published = CURRENT_TIMESTAMP`;
+    let params = [title, bodyText, category || 'general'];
+
+    if (thumbUrl) {
+        query += `, thumbnail = ?`;
+        params.push(thumbUrl);
+    }
+
+    query += ` WHERE id = ?`;
+    params.push(id);
 
     db.run(
-        `UPDATE content 
-         SET title = ?, body = ?, category = ?, author = ?, thumbnail = ?, 
-             tags = ?, is_urgent = ?, status = ?, date_published = CURRENT_TIMESTAMP
-         WHERE id = ?`,
-        [title, body, category, author, thumbnail, tagsJson, is_urgent, status, id],
-        function(err) {
+        query,
+        params,
+        function (err) {
             if (err) {
                 console.error('Update content error:', err);
                 return res.status(500).json({ error: 'Failed to update content' });
@@ -123,16 +94,22 @@ exports.updateContent = (req, res) => {
                 return res.status(404).json({ error: 'Content not found' });
             }
 
-            res.json({ message: 'Content updated successfully' });
+            // Log the action
+            db.run(
+                `INSERT INTO logs (user_id, action, resource_type, resource_id, details, ip_address) 
+                 VALUES (?, ?, 'content', ?, ?, ?)`,
+                [req.user?.id || 0, 'CONTENT_UPDATED', id, `Updated: ${title}`, req.ip || 'unknown']
+            );
+
+            res.json({ message: 'Content updated successfully', thumbnail: thumbUrl });
         }
     );
 };
 
-// Delete content (admin only)
-exports.deleteContent = (req, res) => {
+const deleteContent = (req, res) => {
     const { id } = req.params;
 
-    db.run('DELETE FROM content WHERE id = ?', [id], function(err) {
+    db.run('DELETE FROM content WHERE id = ?', [id], function (err) {
         if (err) {
             console.error('Delete content error:', err);
             return res.status(500).json({ error: 'Failed to delete content' });
@@ -142,24 +119,221 @@ exports.deleteContent = (req, res) => {
             return res.status(404).json({ error: 'Content not found' });
         }
 
+        // Log the action
+        db.run(
+            `INSERT INTO logs (user_id, action, resource_type, resource_id, details, ip_address) 
+             VALUES (?, ?, 'content', ?, ?, ?)`,
+            [req.user?.id || 0, 'CONTENT_DELETED', id, 'Content deleted', req.ip || 'unknown']
+        );
+
         res.json({ message: 'Content deleted successfully' });
     });
 };
 
-// Like content
-exports.likeContent = (req, res) => {
+// Simulator & Scenario Management
+
+const getAllSimulators = (req, res) => {
+    db.all('SELECT * FROM simulators ORDER BY created_at DESC', [], (err, rows) => {
+        if (err) {
+            console.error('Get simulators error:', err);
+            return res.status(500).json({ error: 'Failed to fetch simulators' });
+        }
+        res.json(rows);
+    });
+};
+
+const createSimulator = (req, res) => {
+    // Legacy support for simulator creating, though we are moving to scenarios.
+    const { title, description, type, difficulty, category } = req.body;
+
+    if (!title || !type || !difficulty) {
+        return res.status(400).json({ error: 'Title, type, and difficulty are required' });
+    }
+
+    db.run(
+        `INSERT INTO simulators (title, description, type, difficulty, category) 
+         VALUES (?, ?, ?, ?, ?)`,
+        [title, description || '', type, difficulty, category || 'general'],
+        function (err) {
+            if (err) {
+                console.error('Create simulator error:', err);
+                return res.status(500).json({ error: 'Failed to create simulator' });
+            }
+
+            const simulatorId = this.lastID;
+
+            // Log the action
+            db.run(
+                `INSERT INTO logs (user_id, action, resource_type, resource_id, details, ip_address) 
+                 VALUES (?, ?, 'simulator', ?, ?, ?)`,
+                [req.user?.id || 0, 'SIMULATOR_CREATED', simulatorId, `Created: ${title}`, req.ip || 'unknown']
+            );
+
+            res.status(201).json({
+                message: 'Simulator created successfully',
+                id: simulatorId
+            });
+        }
+    );
+};
+
+const updateSimulator = (req, res) => {
+    const { id } = req.params;
+    const { title, description, difficulty, category } = req.body;
+
+    db.run(
+        `UPDATE simulators 
+         SET title = ?, description = ?, difficulty = ?, category = ? 
+         WHERE id = ?`,
+        [title, description, difficulty, category, id],
+        function (err) {
+            if (err) {
+                console.error('Update simulator error:', err);
+                return res.status(500).json({ error: 'Failed to update simulator' });
+            }
+
+            if (this.changes === 0) {
+                return res.status(404).json({ error: 'Simulator not found' });
+            }
+
+            res.json({ message: 'Simulator updated successfully' });
+        }
+    );
+};
+
+const deleteSimulator = (req, res) => {
     const { id } = req.params;
 
-    db.run('UPDATE content SET likes = likes + 1 WHERE id = ?', [id], function(err) {
+    db.run('DELETE FROM simulators WHERE id = ?', [id], function (err) {
         if (err) {
-            console.error('Like content error:', err);
-            return res.status(500).json({ error: 'Failed to like content' });
+            console.error('Delete simulator error:', err);
+            return res.status(500).json({ error: 'Failed to delete simulator' });
         }
 
         if (this.changes === 0) {
-            return res.status(404).json({ error: 'Content not found' });
+            return res.status(404).json({ error: 'Simulator not found' });
         }
 
-        res.json({ message: 'Content liked successfully' });
+        res.json({ message: 'Simulator deleted successfully' });
     });
+};
+
+// --- Scenario Management ---
+
+const getAllScenarios = (req, res) => {
+    const { type } = req.query;
+    let query = 'SELECT * FROM scenarios';
+    let params = [];
+
+    if (type) {
+        query += ' WHERE simulator_type = ?';
+        params.push(type);
+    }
+
+    query += ' ORDER BY created_at DESC';
+
+    db.all(query, params, (err, rows) => {
+        if (err) {
+            console.error('Get scenarios error:', err);
+            return res.status(500).json({ error: 'Failed to fetch scenarios' });
+        }
+        res.json(rows);
+    });
+};
+
+const createScenario = (req, res) => {
+    const { simulator_type, title, description, objective, expected_answer, hints, xp_reward } = req.body;
+
+    if (!simulator_type || !title || !objective || !expected_answer) {
+        return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    db.run(
+        `INSERT INTO scenarios (simulator_type, title, description, objective, expected_answer, hints, xp_reward)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [simulator_type, title, description || '', objective, expected_answer, JSON.stringify(hints || []), xp_reward || 10],
+        function (err) {
+            if (err) {
+                console.error('Create scenario error:', err);
+                return res.status(500).json({ error: 'Failed to create scenario' });
+            }
+
+            const scenarioId = this.lastID;
+
+            // Log action
+            db.run(
+                `INSERT INTO logs (user_id, action, resource_type, resource_id, details, ip_address) 
+                 VALUES (?, ?, 'scenario', ?, ?, ?)`,
+                [req.user?.id || 0, 'SCENARIO_CREATED', scenarioId, `Created scenario: ${title}`, req.ip || 'unknown']
+            );
+
+            res.status(201).json({
+                message: 'Scenario created successfully',
+                id: scenarioId
+            });
+        }
+    );
+};
+
+const updateScenario = (req, res) => {
+    const { id } = req.params;
+    const { simulator_type, title, description, objective, expected_answer, hints, xp_reward } = req.body;
+
+    db.run(
+        `UPDATE scenarios 
+         SET simulator_type = ?, title = ?, description = ?, objective = ?, expected_answer = ?, hints = ?, xp_reward = ?
+         WHERE id = ?`,
+        [simulator_type, title, description, objective, expected_answer, JSON.stringify(hints || []), xp_reward, id],
+        function (err) {
+            if (err) {
+                console.error('Update scenario error:', err);
+                return res.status(500).json({ error: 'Failed to update scenario' });
+            }
+
+            if (this.changes === 0) {
+                return res.status(404).json({ error: 'Scenario not found' });
+            }
+
+            res.json({ message: 'Scenario updated successfully' });
+        }
+    );
+};
+
+const deleteScenario = (req, res) => {
+    const { id } = req.params;
+
+    db.run('DELETE FROM scenarios WHERE id = ?', [id], function (err) {
+        if (err) {
+            console.error('Delete scenario error:', err);
+            return res.status(500).json({ error: 'Failed to delete scenario' });
+        }
+
+        if (this.changes === 0) {
+            return res.status(404).json({ error: 'Scenario not found' });
+        }
+
+        // Log action
+        db.run(
+            `INSERT INTO logs (user_id, action, resource_type, resource_id, details, ip_address) 
+             VALUES (?, ?, 'scenario', ?, ?, ?)`,
+            [req.user?.id || 0, 'SCENARIO_DELETED', id, 'Scenario deleted', req.ip || 'unknown']
+        );
+
+        res.json({ message: 'Scenario deleted successfully' });
+    });
+};
+
+module.exports = {
+    getAllContent,
+    createContent,
+    updateContent,
+    deleteContent,
+    getAllSimulators,
+    createSimulator,
+    updateSimulator,
+    deleteSimulator,
+    getAllScenarios,
+    createScenario,
+    updateScenario,
+    deleteScenario
 };

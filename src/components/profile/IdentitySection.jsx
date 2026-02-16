@@ -2,9 +2,11 @@ import React, { useMemo } from 'react';
 import { motion } from 'framer-motion';
 import { User, Hash, Briefcase, PlusCircle, Shield, Sword, Search } from 'lucide-react';
 import { useAnalytics } from '../../context/AnalyticsContext';
+import { useAuth } from '../../context/AuthContext';
 
 export const IdentitySection = () => {
     const { cognitiveLayers, ethicalTendency, userMeta } = useAnalytics();
+    const { user } = useAuth();
 
     // Calculate Rank / Archetype based on skills
     const archetype = useMemo(() => {
@@ -30,8 +32,8 @@ export const IdentitySection = () => {
             </div>
 
             <div className="flex-1 relative z-10 w-full text-center md:text-right">
-                <h1 className="text-3xl font-bold text-white mb-2">{archetype.title}</h1>
-                <p className="text-slate-400 font-mono mb-6 text-sm">s44123456@students.tu.edu.sa</p>
+                <h1 className="text-3xl font-bold text-white mb-2">{user?.username || 'المستخدم'}</h1>
+                <p className="text-slate-400 font-mono mb-6 text-sm">{user?.email || 'user@example.com'}</p>
 
                 <div className="flex flex-col md:flex-row items-center md:items-start gap-4">
                     {/* Focus Area */}
@@ -43,12 +45,12 @@ export const IdentitySection = () => {
                         </div>
                     </div>
 
-                    {/* Academic ID */}
+                    {/* Skill Level */}
                     <div className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-xl">
                         <Hash size={16} className="text-slate-400" />
                         <div>
-                            <span className="block text-[10px] text-slate-500 font-bold uppercase">الرقم الجامعي</span>
-                            <span className="text-slate-300 text-sm font-mono">44123456</span>
+                            <span className="block text-[10px] text-slate-500 font-bold uppercase">مستوى المهارة</span>
+                            <span className="text-slate-300 text-sm font-mono">{user?.skill_level || 'غير محدد'}</span>
                         </div>
                     </div>
 
@@ -63,7 +65,7 @@ export const IdentitySection = () => {
             {/* Quote / Motto */}
             <div className="hidden lg:block relative z-10 max-w-xs text-left opacity-60">
                 <p className="text-xs font-serif italic text-slate-400 leading-relaxed">
-                    "الأمن السيبراني ليس وجهة، بل هو رحلة مستمرة من التعلم والتكيف."
+                    "{user?.bio || 'الأمن السيبراني ليس وجهة، بل هو رحلة مستمرة من التعلم والتكيف.'}"
                 </p>
             </div>
         </div>

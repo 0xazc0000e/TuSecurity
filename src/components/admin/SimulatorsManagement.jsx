@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { 
+import {
     Plus, Edit2, Trash2, RefreshCw, Terminal, Shield,
     AlertTriangle, X, Search, Layers
 } from 'lucide-react';
@@ -17,7 +17,7 @@ export default function SimulatorsManagement() {
         title: '',
         description: '',
         type: 'tool',
-        difficulty: 'easy',
+        difficulty: 'beginner',
         category: 'general'
     });
 
@@ -49,7 +49,7 @@ export default function SimulatorsManagement() {
             }
             setShowModal(false);
             setEditingItem(null);
-            setFormData({ title: '', description: '', type: 'tool', difficulty: 'easy', category: 'general' });
+            setFormData({ title: '', description: '', type: 'tool', difficulty: 'beginner', category: 'general' });
             fetchSimulators();
         } catch (err) {
             alert('فشل في حفظ المحاكي');
@@ -78,16 +78,16 @@ export default function SimulatorsManagement() {
         }
     };
 
-    const filteredSimulators = simulators.filter(item => 
+    const filteredSimulators = simulators.filter(item =>
         item.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         item.description?.toLowerCase().includes(searchQuery.toLowerCase())
     );
 
     const getDifficultyColor = (difficulty) => {
         switch (difficulty) {
-            case 'easy': return 'text-green-400 bg-green-500/20';
-            case 'medium': return 'text-yellow-400 bg-yellow-500/20';
-            case 'hard': return 'text-red-400 bg-red-500/20';
+            case 'beginner': return 'text-green-400 bg-green-500/20';
+            case 'intermediate': return 'text-yellow-400 bg-yellow-500/20';
+            case 'advanced': return 'text-red-400 bg-red-500/20';
             default: return 'text-gray-400 bg-gray-500/20';
         }
     };
@@ -125,10 +125,10 @@ export default function SimulatorsManagement() {
                     <button onClick={fetchSimulators} className="p-2 bg-white/5 border border-white/10 rounded-lg hover:bg-white/10">
                         <RefreshCw size={20} className="text-gray-400" />
                     </button>
-                    <button 
+                    <button
                         onClick={() => {
                             setEditingItem(null);
-                            setFormData({ title: '', description: '', type: 'tool', difficulty: 'easy', category: 'general' });
+                            setFormData({ title: '', description: '', type: 'tool', difficulty: 'beginner', category: 'general' });
                             setShowModal(true);
                         }}
                         className="flex items-center gap-2 px-4 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600"
@@ -142,8 +142,8 @@ export default function SimulatorsManagement() {
             {/* Search */}
             <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-                <input 
-                    type="text" 
+                <input
+                    type="text"
                     placeholder="بحث في المحاكيات..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
@@ -182,13 +182,13 @@ export default function SimulatorsManagement() {
                                 {item.category}
                             </span>
                             <div className="flex gap-2">
-                                <button 
+                                <button
                                     onClick={() => handleEdit(item)}
                                     className="p-2 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30"
                                 >
                                     <Edit2 size={16} />
                                 </button>
-                                <button 
+                                <button
                                     onClick={() => handleDelete(item.id)}
                                     className="p-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30"
                                 >
@@ -224,7 +224,7 @@ export default function SimulatorsManagement() {
                                     <input
                                         type="text"
                                         value={formData.title}
-                                        onChange={(e) => setFormData({...formData, title: e.target.value})}
+                                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                                         className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-purple-500"
                                         required
                                     />
@@ -235,7 +235,7 @@ export default function SimulatorsManagement() {
                                         <label className="block text-sm font-medium text-gray-400 mb-2">النوع</label>
                                         <select
                                             value={formData.type}
-                                            onChange={(e) => setFormData({...formData, type: e.target.value})}
+                                            onChange={(e) => setFormData({ ...formData, type: e.target.value })}
                                             className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-purple-500"
                                         >
                                             <option value="tool">أداة</option>
@@ -246,12 +246,12 @@ export default function SimulatorsManagement() {
                                         <label className="block text-sm font-medium text-gray-400 mb-2">المستوى</label>
                                         <select
                                             value={formData.difficulty}
-                                            onChange={(e) => setFormData({...formData, difficulty: e.target.value})}
+                                            onChange={(e) => setFormData({ ...formData, difficulty: e.target.value })}
                                             className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-purple-500"
                                         >
-                                            <option value="easy">مبتدئ</option>
-                                            <option value="medium">متوسط</option>
-                                            <option value="hard">متقدم</option>
+                                            <option value="beginner">مبتدئ</option>
+                                            <option value="intermediate">متوسط</option>
+                                            <option value="advanced">متقدم</option>
                                         </select>
                                     </div>
                                 </div>
@@ -260,7 +260,7 @@ export default function SimulatorsManagement() {
                                     <label className="block text-sm font-medium text-gray-400 mb-2">التصنيف</label>
                                     <select
                                         value={formData.category}
-                                        onChange={(e) => setFormData({...formData, category: e.target.value})}
+                                        onChange={(e) => setFormData({ ...formData, category: e.target.value })}
                                         className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-purple-500"
                                     >
                                         <option value="general">عام</option>
@@ -275,7 +275,7 @@ export default function SimulatorsManagement() {
                                     <label className="block text-sm font-medium text-gray-400 mb-2">الوصف</label>
                                     <textarea
                                         value={formData.description}
-                                        onChange={(e) => setFormData({...formData, description: e.target.value})}
+                                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                                         rows={4}
                                         className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-lg text-white focus:outline-none focus:border-purple-500 resize-none"
                                         required
