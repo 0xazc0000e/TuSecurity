@@ -15,6 +15,7 @@ import {
     Menu, X, ChevronLeft, Layers
 } from 'lucide-react';
 import mermaid from 'mermaid';
+import { apiCall } from '../context/AuthContext';
 
 mermaid.initialize({ startOnLoad: false, theme: 'dark', securityLevel: 'loose' });
 
@@ -184,7 +185,7 @@ function InteractiveTerminal({ config, onComplete }) {
 /* ═══════════════════════════════════════════════════════════
    QUIZ BLOCK
    ═══════════════════════════════════════════════════════════ */
-function QuizBlock({ config, onPass }) {
+function QuizBlock({ config, onSubmit }) {
     const [answers, setAnswers] = useState({});
     const [submitted, setSubmitted] = useState(false);
     const [passed, setPassed] = useState(false);
@@ -196,7 +197,21 @@ function QuizBlock({ config, onPass }) {
     if (!Array.isArray(questions) || !questions.length) return null;
 
     const score = questions.reduce((a, q, i) => a + (answers[i] === q.correctAnswer ? 1 : 0), 0);
-    const handleSubmit = () => { const ok = questions.every((q, i) => answers[i] === q.correctAnswer); setSubmitted(true); setPassed(ok); if (ok) onPass?.(); };
+
+    const handleSubmit = () => {
+        const ok = questions.every((q, i) => answers[i] === q.correctAnswer);
+        setSubmitted(true);
+        setPassed(ok);
+
+        // Pass results to parent
+        onSubmit?.({
+            score,
+            total_questions: questions.length,
+            passed: ok,
+            answers
+        });
+    };
+
     const reset = () => { setSubmitted(false); setPassed(false); setAnswers({}); setCurrentQ(0); };
 
     return (
@@ -366,13 +381,6 @@ function Sidebar({ course, currentLessonId, completedLessons, onSelectLesson, on
 
 /* ═══════════════════════════════════════════════════════════
    LESSON VIEWER — Main Component
-   Props:
-     lesson        - lesson object {id, title, content, quiz_config, terminal_config, ...}
-     onComplete    - called when lesson completed (with next lesson logic)
-     onBack        - go back to track view
-     course        - {title, units: [{title, lessons: [...]}]} for sidebar
-     onSelectLesson - switch to a different lesson
-     completedLessons - array of completed lesson IDs
    ═══════════════════════════════════════════════════════════ */
 function LessonViewer({ lesson, onComplete, onBack, course, onSelectLesson, completedLessons = [] }) {
     const [termPassed, setTermPassed] = useState(false);
@@ -388,7 +396,7 @@ function LessonViewer({ lesson, onComplete, onBack, course, onSelectLesson, comp
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }, [lesson?.id]);
 
-    // Parse configs safely (handle double-stringified)
+    // Parse configs safely
     const parseJSON = (val, fallback) => {
         let parsed = val;
         if (typeof parsed === 'string') { try { parsed = JSON.parse(parsed); } catch { return fallback; } }
@@ -403,13 +411,30 @@ function LessonViewer({ lesson, onComplete, onBack, course, onSelectLesson, comp
     const hasTerm = termConfig && typeof termConfig === 'object' && Array.isArray(termConfig.commands) && termConfig.commands.length > 0;
     const canComplete = (!hasQuiz || quizPassed) && (!hasTerm || termPassed);
 
+    const handleQuizSubmit = async (result) => {
+        try {
+            await apiCall('/lms/quiz/submit', {
+                method: 'POST',
+                body: JSON.stringify({
+                    lesson_id: lesson.id,
+                    ...result
+                })
+            });
+
+            if (result.passed) {
+                setQuizPassed(true);
+                try { import('canvas-confetti').then(m => m.default({ particleCount: 100, spread: 70, origin: { y: 0.6 } })); } catch { }
+            }
+        } catch (error) {
+            console.error("Quiz submission failed", error);
+        }
+    };
+
     const handleComplete = () => {
         setCompleted(true);
         try { import('canvas-confetti').then(m => m.default({ particleCount: 200, spread: 100, origin: { y: 0.6 }, colors: ['#a855f7', '#ec4899', '#38bdf8', '#4ade80'] })); } catch { }
         setTimeout(() => onComplete?.(), 2500);
     };
-
-    if (!lesson) return null;
 
     const mdComponents = useMemo(() => ({
         code({ node, inline, className, children, ...props }) {
@@ -466,7 +491,6 @@ function LessonViewer({ lesson, onComplete, onBack, course, onSelectLesson, comp
             );
         },
         blockquote({ node, children, ...props }) {
-            // Check for callouts in text content
             const text = node?.children?.map(c => c.children?.map(t => t.value || '').join('')).join('\n') || '';
             const callout = parseCallout(text);
 
@@ -497,6 +521,8 @@ function LessonViewer({ lesson, onComplete, onBack, course, onSelectLesson, comp
             return <a href={href} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 hover:underline decoration-blue-400/30 underline-offset-4 transition-all">{children}</a>
         }
     }), []);
+
+    if (!lesson) return null;
 
     const wordCount = (lesson.content || '').split(/\s+/).length;
     const readTime = Math.max(1, Math.ceil(wordCount / 200));
@@ -615,7 +641,6 @@ function LessonViewer({ lesson, onComplete, onBack, course, onSelectLesson, comp
                         )}
 
                         {/* Content */}
-                        {/* Content */}
                         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.3 }}
                             className="bg-[#0a0a16] border-r-2 border-purple-500/20 rounded-2xl p-8 md:p-12 shadow-sm">
                             <article className="obs-prose max-w-none">
@@ -649,7 +674,7 @@ function LessonViewer({ lesson, onComplete, onBack, course, onSelectLesson, comp
                                     <span className="text-xs text-yellow-400 font-bold flex items-center gap-1.5"><Brain size={12} /> اختبار الفهم</span>
                                     <div className="flex-1 h-px bg-gradient-to-r from-yellow-500/30 to-transparent" />
                                 </div>
-                                <QuizBlock config={quizConfig} onPass={() => setQuizPassed(true)} />
+                                <QuizBlock config={quizConfig} onSubmit={handleQuizSubmit} />
                             </div>
                         )}
 

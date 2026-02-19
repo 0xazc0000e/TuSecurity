@@ -13,17 +13,17 @@ export const getApiImageUrl = (path) => {
         return path;
     }
 
-    // Get API base URL from env or default
-    // We assume VITE_API_URL is something like 'http://localhost:5000/api'
-    // We need the root, so we strip '/api' if present
+    // Get API base URL from env
+    // Default to localhost:5000 if not set
     let baseUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-    // If baseUrl ends with /api, remove it to get the server root
+    // We need the server root (http://localhost:5000), not the API root (http://localhost:5000/api)
+    // because static files are served from /uploads, not /api/uploads
     if (baseUrl.endsWith('/api')) {
-        baseUrl = baseUrl.slice(0, -4);
+        baseUrl = baseUrl.substring(0, baseUrl.length - 4);
     }
 
-    // Remove trailing slash from base if present
+    // Remove trailing slash if present
     if (baseUrl.endsWith('/')) {
         baseUrl = baseUrl.slice(0, -1);
     }

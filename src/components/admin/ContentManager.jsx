@@ -1,12 +1,31 @@
 import React, { useState } from 'react';
 import { FileText, Plus, Edit3, Trash2, Eye, Calendar, AlertTriangle, X, Check, Upload, Image as ImageIcon, Bold, Italic, List, Link as LinkIcon } from 'lucide-react';
-import { useDatabase } from '../../context/DatabaseContext';
+import { useAuth } from '../../context/AuthContext';
 import { GlassModal } from '../ui/GlassModal';
 
 export const ContentManager = () => {
-    const { news, articles, threats, deleteContent, addContent } = useDatabase();
     const [activeTab, setActiveTab] = useState('articles'); // articles | threats | news
     const [isModalOpen, setIsModalOpen] = useState(false);
+    const [content, setContent] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+
+    // Fetch content on mount and tab change
+    React.useEffect(() => {
+        setIsLoading(true);
+        const fetchContent = async () => {
+            try {
+                // Fetch from correct endpoints based on tab
+                // For now, we use /api/content for everything, filtering client-side or server-side
+                const res = await apiCall(`/content?type=${activeTab === 'articles' ? 'article' : activeTab === 'news' ? 'news' : 'threat'}`);
+                setContent(res);
+            } catch (err) {
+                console.error(err);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchContent();
+    }, [activeTab]);
 
     // Form State
     const [formData, setFormData] = useState({
@@ -36,47 +55,43 @@ export const ContentManager = () => {
         setIsModalOpen(true);
     };
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
 
-        let newItem = {
-            ...formData,
-            desc: formData.body.substring(0, 100) + '...', // Auto-generate short desc
-            date: new Date().toLocaleDateString('en-CA'),
-        };
-
-        if (activeTab === 'threats') {
-            newItem = {
-                name: formData.title,
-                type: formData.category,
-                risk: formData.risk,
-                desc: formData.body,
-                discovered: new Date().getFullYear().toString(),
-                status: formData.status
+        try {
+            const newItem = {
+                title: formData.title,
+                body: formData.body,
+                type: activeTab === 'articles' ? 'article' : activeTab === 'news' ? 'news' : 'threat',
+                category: formData.category,
+                image_url: formData.image,
+                // Add specific fields
+                ...(activeTab === 'threats' ? { risk: formData.risk, status: formData.status } : { status: formData.status })
             };
-        } else if (activeTab === 'news') {
-            newItem = {
-                ...newItem,
-                urgent: formData.risk === 'Critical',
-            };
-        }
 
-        addContent(activeTab, newItem);
-        setIsModalOpen(false);
-    };
+            await apiCall('/content', {
+                method: 'POST',
+                body: JSON.stringify(newItem)
+            });
 
-    const getContent = () => {
-        switch (activeTab) {
-            case 'articles': return articles.map(i => ({ ...i, type: 'article' }));
-            case 'threats': return threats.map(i => ({ ...i, title: i.name, type: 'threat' }));
-            case 'news': return news.map(i => ({ ...i, type: 'news' }));
-            default: return [];
+            // Refresh content
+            const res = await apiCall(`/content?type=${newItem.type}`);
+            setContent(res);
+            setIsModalOpen(false);
+            alert('تمت الإضافة بنجاح');
+        } catch (err) {
+            alert('فشل الإضافة: ' + err.message);
         }
     };
 
-    const handleDelete = (id) => {
+    const handleDelete = async (id) => {
         if (confirm('هل أنت متأكد من الحذف؟')) {
-            deleteContent(activeTab, id);
+            try {
+                await apiCall(`/content/${id}`, { method: 'DELETE' });
+                setContent(prev => prev.filter(i => i.id !== id));
+            } catch (err) {
+                alert('فشل الحذف: ' + err.message);
+            }
         }
     };
 
@@ -102,45 +117,41 @@ export const ContentManager = () => {
 
             {/* Content Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {getContent().map(item => (
+                {content.map(item => (
                     <div key={item.id} className="bg-[#050214]/60 border border-white/5 p-5 rounded-2xl group hover:border-[#7112AF]/30 transition-all flex flex-col relative overflow-hidden">
-                        {item.image && (
+                        {item.thumbnail || item.image_url ? (
                             <div className="absolute inset-0 z-0">
-                                <img src={item.image} alt="" className="w-full h-full object-cover opacity-20 group-hover:opacity-30 transition-opacity" />
+                                <img src={item.thumbnail || item.image_url} alt="" className="w-full h-full object-cover opacity-20 group-hover:opacity-30 transition-opacity" />
                                 <div className="absolute inset-0 bg-gradient-to-t from-[#050214] via-[#050214]/80 to-transparent" />
                             </div>
-                        )}
+                        ) : null}
 
                         <div className="relative z-10">
                             <div className="flex justify-between items-start mb-4">
                                 <span className={`text-[10px] font-bold px-2 py-1 rounded-full uppercase tracking-wider ${item.status === 'published' || activeTab === 'threats' ? 'bg-green-500/10 text-green-500' :
-                                        item.status === 'draft' ? 'bg-slate-500/10 text-slate-400' : 'bg-yellow-500/10 text-yellow-500'
+                                    item.status === 'draft' ? 'bg-slate-500/10 text-slate-400' : 'bg-yellow-500/10 text-yellow-500'
                                     }`}>
-                                    {item.status || (item.risk ? `Risk: ${item.risk}` : 'draft')}
+                                    {item.status || 'published'}
                                 </span>
                                 <div className="flex gap-1">
                                     <button onClick={() => handleDelete(item.id)} className="p-1.5 hover:bg-red-500/10 rounded-lg text-slate-400 hover:text-red-400 transition-colors"><Trash2 size={14} /></button>
                                 </div>
                             </div>
 
-                            <h3 className="text-white font-bold text-lg mb-2 line-clamp-2 leading-snug">{item.title || item.name}</h3>
-                            <p className="text-slate-400 text-xs line-clamp-2 mb-4 h-8">{item.desc || item.body || 'لا يوجد وصف مختصر...'}</p>
+                            <h3 className="text-white font-bold text-lg mb-2 line-clamp-2 leading-snug">{item.title}</h3>
+                            <p className="text-slate-400 text-xs line-clamp-2 mb-4 h-8">{item.body || 'لا يوجد وصف مختصر...'}</p>
 
                             <div className="flex items-center gap-3 text-xs text-slate-500 mb-4">
                                 <span className="flex items-center gap-1"><FileText size={12} /> {activeTab}</span>
-                                <span className="flex items-center gap-1"><Calendar size={12} /> {item.date || item.discovered}</span>
+                                <span className="flex items-center gap-1"><Calendar size={12} /> {item.created_at ? new Date(item.created_at).toLocaleDateString() : 'Today'}</span>
                             </div>
 
                             <div className="flex items-center justify-between border-t border-white/5 pt-4 mt-auto">
                                 <div className="flex items-center gap-2">
-                                    {item.author && (
-                                        <>
-                                            <div className="w-6 h-6 rounded-full bg-[#7112AF] flex items-center justify-center text-[10px] text-white font-bold">
-                                                {item.author[0]}
-                                            </div>
-                                            <span className="text-xs text-slate-400">{item.author}</span>
-                                        </>
-                                    )}
+                                    <div className="w-6 h-6 rounded-full bg-[#7112AF] flex items-center justify-center text-[10px] text-white font-bold">
+                                        A
+                                    </div>
+                                    <span className="text-xs text-slate-400">{item.author || 'Admin'}</span>
                                 </div>
                                 <button className="text-xs font-bold text-[#7112AF] hover:underline">معاينة</button>
                             </div>

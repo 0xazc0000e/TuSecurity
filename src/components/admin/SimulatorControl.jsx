@@ -1,9 +1,18 @@
 import React from 'react';
 import { ToggleLeft, ToggleRight, Settings, Play, Archive, CheckCircle, AlertOctagon } from 'lucide-react';
-import { useDatabase } from '../../context/DatabaseContext';
+import { useAuth, apiCall } from '../../context/AuthContext';
 
 export const SimulatorControl = () => {
-    const { simulators, toggleSimulator } = useDatabase();
+    const [simulators, setSimulators] = React.useState([]);
+
+    React.useEffect(() => {
+        apiCall('/content/simulators').then(setSimulators).catch(console.error);
+    }, []);
+
+    const toggleSimulator = async (id) => {
+        // Mock toggle for now since backend doesn't support status toggle yet
+        alert('Simulator status toggle not fully implemented in backend yet.');
+    };
 
     return (
         <div className="space-y-6 animate-fadeIn">

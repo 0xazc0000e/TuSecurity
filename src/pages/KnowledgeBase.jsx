@@ -8,8 +8,10 @@ import {
     Heart, Bookmark, Share2
 } from 'lucide-react';
 import { lmsAPI } from '../services/api';
+import { apiCall } from '../context/AuthContext';
 import axios from 'axios';
 import LessonViewer from '../components/LessonViewer';
+import ArticleViewer from '../components/ArticleViewer';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -19,14 +21,14 @@ const ICON_MAP = {
 };
 
 
-const BASE_URL = 'http://localhost:5000';
+const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 // ─── Progress helpers (localStorage) ──────────────────────
 // (Progress helpers removed)
 
 
 // ─── Track Card ───────────────────────────────────────────
-function TrackCard({ track, onClick, enrolled, completedLessons = [] }) {
+function TrackCard({ track, onClick, onEnroll, enrolled, completedLessons = [] }) {
     const Icon = ICON_MAP[track.icon] || Shield;
     const totalLessons = track.courses?.reduce((a, c) => a + (c.units?.reduce((b, u) => b + (u.lessons?.length || 0), 0) || 0), 0) || 0;
     const totalXP = track.courses?.reduce((a, c) => a + (c.units?.reduce((b, u) => b + (u.lessons?.reduce((x, l) => x + (l.xp_reward || 0), 0) || 0), 0) || 0), 0) || 0;
@@ -42,8 +44,7 @@ function TrackCard({ track, onClick, enrolled, completedLessons = [] }) {
             if (!token) return alert('يجب تسجيل يالدخول أولاً');
 
             await lmsAPI.enroll({ type: 'track', itemId: track.id });
-            // Reload page to refresh state (simple solution)
-            window.location.reload();
+            if (onEnroll) onEnroll(track);
         } catch (error) {
             console.error(error);
             alert(`فشل التسجيل: ${error.message}`);
@@ -135,27 +136,70 @@ function CourseCard({ course }) {
 
 // ─── Article Card ─────────────────────────────────────────
 function ArticleCard({ article, onClick }) {
-    const [liked, setLiked] = useState(() => {
-        try { return JSON.parse(localStorage.getItem('article_likes') || '[]').includes(article.id); } catch { return false; }
-    });
-    const [saved, setSaved] = useState(() => {
-        try { return JSON.parse(localStorage.getItem('article_saves') || '[]').includes(article.id); } catch { return false; }
-    });
+    const [liked, setLiked] = useState(false);
+    const [saved, setSaved] = useState(false);
+    const [loading, setLoading] = useState(false);
 
-    const toggleLike = (e) => {
+    // Check initial status from backend
+    useEffect(() => {
+        const checkStatus = async () => {
+            try {
+                const status = await apiCall(`/user/item-status/article/${article.id}`);
+                setLiked(status.isLiked);
+                setSaved(status.isBookmarked);
+            } catch (err) {
+                // Silent fail - just show as not liked/saved
+            }
+        };
+        if (article.id) checkStatus();
+    }, [article.id]);
+
+    const toggleLike = async (e) => {
         e.stopPropagation();
-        const arr = JSON.parse(localStorage.getItem('article_likes') || '[]');
-        const next = liked ? arr.filter(id => id !== article.id) : [...arr, article.id];
-        localStorage.setItem('article_likes', JSON.stringify(next));
-        setLiked(!liked);
+        if (loading) return;
+        setLoading(true);
+        try {
+            if (liked) {
+                await apiCall('/user/likes/remove', {
+                    method: 'POST',
+                    body: JSON.stringify({ itemId: article.id, itemType: 'article' })
+                });
+            } else {
+                await apiCall('/user/likes/add', {
+                    method: 'POST',
+                    body: JSON.stringify({ itemId: article.id, itemType: 'article' })
+                });
+            }
+            setLiked(!liked);
+        } catch (err) {
+            alert('خطأ: ' + (err.message || 'فشل في حفظ الإعجاب'));
+        } finally {
+            setLoading(false);
+        }
     };
 
-    const toggleSave = (e) => {
+    const toggleSave = async (e) => {
         e.stopPropagation();
-        const arr = JSON.parse(localStorage.getItem('article_saves') || '[]');
-        const next = saved ? arr.filter(id => id !== article.id) : [...arr, article.id];
-        localStorage.setItem('article_saves', JSON.stringify(next));
-        setSaved(!saved);
+        if (loading) return;
+        setLoading(true);
+        try {
+            if (saved) {
+                await apiCall('/user/bookmarks/remove', {
+                    method: 'POST',
+                    body: JSON.stringify({ itemId: article.id, itemType: 'article' })
+                });
+            } else {
+                await apiCall('/user/bookmarks/add', {
+                    method: 'POST',
+                    body: JSON.stringify({ itemId: article.id, itemType: 'article', note: article.title })
+                });
+            }
+            setSaved(!saved);
+        } catch (err) {
+            alert('خطأ: ' + (err.message || 'فشل في حفظ المقال'));
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleShare = (e) => {
@@ -309,16 +353,29 @@ export default function KnowledgeBase() {
             setArticles(Array.isArray(art) ? art : []);
             setTags(Array.isArray(tgs) ? tgs : []);
 
-            if (trackIdFromUrl) {
-                const foundTrack = syllabusData.find(t => t.id === trackIdFromUrl);
-                if (foundTrack) setSelectedTrack(foundTrack);
+            // Deep Linking Logic
+            if (param) {
+                if (param.startsWith('articles/')) {
+                    const articleId = parseInt(param.split('/')[1]);
+                    const foundArticle = (Array.isArray(art) ? art : []).find(a => a.id === articleId);
+                    if (foundArticle) {
+                        setSelectedArticle(foundArticle);
+                        setActiveTab('articles');
+                    }
+                } else {
+                    const trackId = parseInt(param.split('/')[0]);
+                    if (!isNaN(trackId)) {
+                        const foundTrack = syllabusData.find(t => t.id === trackId);
+                        if (foundTrack) setSelectedTrack(foundTrack);
+                    }
+                }
             }
         }).finally(() => setIsLoading(false));
 
         // Fetch enrollments
         const token = localStorage.getItem('token');
         if (token) {
-            axios.get('http://localhost:5000/api/auth/profile', {
+            axios.get(`${BASE_URL}/api/auth/profile`, {
                 headers: { Authorization: `Bearer ${token}` }
             })
                 .then(res => {
@@ -334,7 +391,7 @@ export default function KnowledgeBase() {
                 .then(ids => setCompletedLessons(ids))
                 .catch(err => console.error('Failed to fetch progress:', err));
         }
-    }, [trackIdFromUrl]);
+    }, [param]); // Depend on param to re-run if URL changes
 
     // (Duplicate useEffect removed)
 
@@ -408,105 +465,13 @@ export default function KnowledgeBase() {
     }
 
     // ─── Level 3: Article Viewer ───
+    // ─── Level 3: Article Viewer ───
     if (selectedArticle) {
-        const artLiked = (() => { try { return JSON.parse(localStorage.getItem('article_likes') || '[]').includes(selectedArticle.id); } catch { return false; } })();
-        const artSaved = (() => { try { return JSON.parse(localStorage.getItem('article_saves') || '[]').includes(selectedArticle.id); } catch { return false; } })();
-
-        const toggleArtLike = () => {
-            const arr = JSON.parse(localStorage.getItem('article_likes') || '[]');
-            const next = artLiked ? arr.filter(id => id !== selectedArticle.id) : [...arr, selectedArticle.id];
-            localStorage.setItem('article_likes', JSON.stringify(next));
-            setSelectedArticle({ ...selectedArticle }); // trigger re-render
-        };
-        const toggleArtSave = () => {
-            const arr = JSON.parse(localStorage.getItem('article_saves') || '[]');
-            const next = artSaved ? arr.filter(id => id !== selectedArticle.id) : [...arr, selectedArticle.id];
-            localStorage.setItem('article_saves', JSON.stringify(next));
-            setSelectedArticle({ ...selectedArticle });
-        };
-        const shareArt = () => {
-            if (navigator.share) navigator.share({ title: selectedArticle.title, text: selectedArticle.description, url: window.location.href });
-            else { navigator.clipboard.writeText(window.location.href); alert('تم نسخ الرابط'); }
-        };
-
         return (
-            <div className="min-h-screen bg-[#05050f]" dir="rtl">
-                <nav className="sticky top-0 z-50 bg-[#12122a]/90 backdrop-blur border-b border-[#1f1f3d] px-6 py-3 flex items-center justify-between">
-                    <button onClick={() => setSelectedArticle(null)}
-                        className="flex items-center text-gray-400 hover:text-white transition-colors text-sm">
-                        <ChevronRight size={18} className="ml-1" /> عودة للمقالات
-                    </button>
-                    <span className="text-white font-bold text-sm">{selectedArticle.title}</span>
-                    <div className="flex items-center gap-2">
-                        <button onClick={toggleArtLike} className={`p-2 rounded-lg transition-all ${artLiked ? 'text-red-400 bg-red-500/10' : 'text-gray-400 hover:text-red-400'}`}>
-                            <Heart size={16} className={artLiked ? 'fill-current' : ''} />
-                        </button>
-                        <button onClick={toggleArtSave} className={`p-2 rounded-lg transition-all ${artSaved ? 'text-yellow-400 bg-yellow-500/10' : 'text-gray-400 hover:text-yellow-400'}`}>
-                            <Bookmark size={16} className={artSaved ? 'fill-current' : ''} />
-                        </button>
-                        <button onClick={shareArt} className="p-2 rounded-lg text-gray-400 hover:text-blue-400 transition-all">
-                            <Share2 size={16} />
-                        </button>
-                    </div>
-                </nav>
-                {/* Hero Image */}
-                {selectedArticle.cover_image && (
-                    <div className="w-full h-64 md:h-80 relative">
-                        <div className="absolute inset-0 bg-gradient-to-t from-[#05050f] via-[#05050f]/50 to-transparent z-10" />
-                        <img
-                            src={selectedArticle.cover_image.startsWith('http') ? selectedArticle.cover_image : `${BASE_URL}${selectedArticle.cover_image}`}
-                            alt={selectedArticle.title}
-                            className="w-full h-full object-cover"
-                        />
-                        <div className="absolute bottom-0 right-0 w-full p-6 z-20 max-w-3xl mx-auto">
-                            <h1 className="text-3xl md:text-4xl font-bold text-white mb-2 shadow-black drop-shadow-lg">{selectedArticle.title}</h1>
-                        </div>
-                    </div>
-                )}
-
-                {/* Article Content */}
-                <div className="max-w-3xl mx-auto px-6 py-8 relative z-20">
-                    {/* Author & meta */}
-                    <div className="flex items-center gap-3 mb-6 pb-4 border-b border-[#1f1f3d]">
-                        <div className="w-10 h-10 bg-orange-500/20 rounded-full flex items-center justify-center">
-                            <User size={18} className="text-orange-400" />
-                        </div>
-                        <div>
-                            <p className="text-white font-bold text-sm">{selectedArticle.author || 'غير محدد'}</p>
-                            <p className="text-xs text-gray-500 flex items-center gap-2">
-                                <Clock size={12} /> {selectedArticle.read_time || 5} دقيقة قراءة
-                            </p>
-                        </div>
-                    </div>
-                    {/* Markdown body - Obsidian Theme */}
-                    <div className="obs-prose max-w-none">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                            {selectedArticle.content || ''}
-                        </ReactMarkdown>
-                    </div>
-                    {/* Bottom actions */}
-                    <div className="flex items-center justify-between mt-10 pt-6 border-t border-[#1f1f3d]">
-                        <div className="flex items-center gap-4">
-                            <button onClick={toggleArtLike}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${artLiked ? 'bg-red-500/20 text-red-400 border border-red-500/30' : 'bg-white/5 text-gray-400 border border-white/10 hover:bg-red-500/10 hover:text-red-400'}`}>
-                                <Heart size={16} className={artLiked ? 'fill-current' : ''} /> إعجاب
-                            </button>
-                            <button onClick={toggleArtSave}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${artSaved ? 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30' : 'bg-white/5 text-gray-400 border border-white/10 hover:bg-yellow-500/10 hover:text-yellow-400'}`}>
-                                <Bookmark size={16} className={artSaved ? 'fill-current' : ''} /> حفظ
-                            </button>
-                            <button onClick={shareArt}
-                                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold bg-white/5 text-gray-400 border border-white/10 hover:bg-blue-500/10 hover:text-blue-400 transition-all">
-                                <Share2 size={16} /> مشاركة
-                            </button>
-                        </div>
-                        <button onClick={() => setSelectedArticle(null)}
-                            className="text-sm text-gray-500 hover:text-white transition-colors">
-                            عودة للمقالات →
-                        </button>
-                    </div>
-                </div>
-            </div>
+            <ArticleViewer
+                article={selectedArticle}
+                onBack={() => setSelectedArticle(null)}
+            />
         );
     }
 
@@ -599,6 +564,10 @@ export default function KnowledgeBase() {
                                                 key={track.id}
                                                 track={track}
                                                 onClick={setSelectedTrack}
+                                                onEnroll={(t) => {
+                                                    setEnrollments(prev => [...prev, t.id]);
+                                                    setSelectedTrack(t);
+                                                }}
                                                 enrolled={enrollments.includes(track.id)}
                                                 completedLessons={completedLessons}
                                             />

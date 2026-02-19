@@ -16,7 +16,6 @@ const PORTALS = [
 
 export default function Articles() {
     const { cognitiveLayers, logEvent } = useAnalytics();
-    const { articles: ARTICLES } = useDatabase(); // Kept for fallback
     const { apiCall } = useAuth();
     const [articlesData, setArticlesData] = useState([]);
     const [activePortal, setActivePortal] = useState(null);

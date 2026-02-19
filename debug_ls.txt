@@ -1,5 +1,0 @@
-total 0
-drwxr-xr-x. 1 azo azo  44 Jan 30 19:23 .
-drwxr-xr-x. 1 azo azo 368 Jan 30 18:00 ..
--rw-r--r--. 1 azo azo   0 Jan 30 19:23 debug_ls.txt
-drwxr-xr-x. 1 azo azo 240 Jan 28 00:25 logos_temp

@@ -16,7 +16,7 @@ const SPOTLIGHT_THREAT = {
 
 export default function News() {
     const { cognitiveLayers, logEvent } = useAnalytics();
-    const { news: NEWS_DATA } = useDatabase(); // Kept for fallback if needed, but not used in new logic
+    // const { news: NEWS_DATA } = useDatabase(); // Removed unused hook
     const { apiCall } = useAuth();
     const [newsData, setNewsData] = useState([]);
     const [view, setView] = useState('personal'); // personal, spotlight, micro, filter

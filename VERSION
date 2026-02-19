@@ -1,0 +1,8 @@
+CyberClub v2.1
+Codename: Profile & RTL Update
+Date: 2026-02-17
+Status: Stable
+Notable Changes:
+- Fixed Profile points and avatar display
+- Implemented RTL support for Knowledge Base
+- Fixed Progress Tracking issues

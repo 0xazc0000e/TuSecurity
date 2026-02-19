@@ -38,7 +38,9 @@ export async function apiCall(endpoint, options = {}) {
         }
 
         if (!response.ok) {
-            throw new Error(data.error || `Request failed with status ${response.status}`);
+            const error = new Error(data.error || `Request failed with status ${response.status}`);
+            error.data = data; // Attach response data to error object
+            throw error;
         }
 
         return data;
@@ -67,8 +69,8 @@ export const AuthProvider = ({ children }) => {
     const [loading, setLoading] = useState(true);
     const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-    // User needs onboarding if authenticated but missing major
-    const needsOnboarding = isAuthenticated && user && !user.major;
+    // User needs onboarding if authenticated but missing bio (profile not completed)
+    const needsOnboarding = isAuthenticated && user && !user.bio;
 
     // Check for stored token on mount
     useEffect(() => {
@@ -111,6 +113,16 @@ export const AuthProvider = ({ children }) => {
             setIsAuthenticated(true);
             return { success: true, user: data.user };
         } catch (error) {
+            // Check for verification requirement in error data
+            if (error.data && error.data.requiresVerification) {
+                return {
+                    success: false,
+                    requiresVerification: true,
+                    userId: error.data.userId,
+                    email: error.data.email,
+                    error: error.data.message || 'يرجى تأكيد البريد الإلكتروني'
+                };
+            }
             return { success: false, error: error.message || 'فشل تسجيل الدخول' };
         }
     };
@@ -118,15 +130,38 @@ export const AuthProvider = ({ children }) => {
     // Register function - POST to real backend
     const register = async ({ username, email, password, universityId }) => {
         try {
+            // Send username as fullName as well since the form is unified
             const data = await apiCall('/auth/register', {
                 method: 'POST',
-                body: JSON.stringify({ username, email, password, university_id: universityId, role: 'student' })
+                body: JSON.stringify({
+                    username,
+                    fullName: username, // Map username to fullName
+                    email,
+                    password,
+                    university_id: universityId,
+                    role: 'student'
+                })
             });
 
-            // Store JWT token
-            localStorage.setItem('token', data.token);
-            setUser(data.user);
-            setIsAuthenticated(true);
+            // Registration usually returns 201 with requiresVerification = true
+            // It DOES NOT return a token yet.
+            if (data.requiresVerification) {
+                return {
+                    success: true,
+                    requiresVerification: true,
+                    userId: data.userId,
+                    email: data.email,
+                    message: data.message
+                };
+            }
+
+            // Fallback for immediate login (if configured that way)
+            if (data.token) {
+                localStorage.setItem('token', data.token);
+                setUser(data.user);
+                setIsAuthenticated(true);
+            }
+
             return { success: true, user: data.user };
         } catch (error) {
             return { success: false, error: error.message || 'فشل إنشاء الحساب' };

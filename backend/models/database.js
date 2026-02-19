@@ -24,16 +24,18 @@ function initializeDatabase() {
             // --- USERS & CORE ---
             db.run(`CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                full_name TEXT NOT NULL,
                 username TEXT UNIQUE NOT NULL,
                 email TEXT UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
+                password_hash TEXT, -- Nullable for social login
                 role TEXT DEFAULT 'student' CHECK(role IN ('admin', 'editor', 'student')),
-                university_id TEXT,
-                major TEXT,
-                bio TEXT,
-                skill_level TEXT,
-                interests TEXT,
+                is_verified BOOLEAN DEFAULT 0,
+                verification_token TEXT,
                 avatar TEXT DEFAULT '/default-avatar.png',
+                bio TEXT,
+                interests TEXT DEFAULT '[]', -- JSON string
+                auth_provider TEXT DEFAULT 'local', -- 'local', 'google', 'microsoft'
+                provider_id TEXT, -- For social login ID
                 total_xp INTEGER DEFAULT 0,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 last_active DATETIME,
@@ -239,6 +241,19 @@ function initializeDatabase() {
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
             )`);
 
+            // --- BADGES DEFINITIONS ---
+            db.run(`CREATE TABLE IF NOT EXISTS badges (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE,
+                description TEXT NOT NULL,
+                icon TEXT DEFAULT '🏅',
+                color TEXT DEFAULT '#f59e0b',
+                requirement_type TEXT NOT NULL, -- 'xp', 'lessons', 'streak', 'simulators', 'events'
+                requirement_value INTEGER NOT NULL,
+                xp_reward INTEGER DEFAULT 50,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )`);
+
             // --- USER BADGES ---
             db.run(`CREATE TABLE IF NOT EXISTS user_badges (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -311,16 +326,138 @@ function initializeDatabase() {
             db.run(`CREATE TABLE IF NOT EXISTS event_registrations (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 event_id INTEGER NOT NULL,
+                user_id INTEGER,
                 name TEXT NOT NULL,
                 email TEXT,
                 phone TEXT,
                 student_id TEXT,
                 experience TEXT,
                 registered_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (event_id) REFERENCES club_events(id) ON DELETE CASCADE
+                FOREIGN KEY (event_id) REFERENCES club_events(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
             )`);
 
-            console.log('Database tables initialized (4-Level LMS Hierarchy + Events Active)');
+            // --- XP TRANSACTIONS ---
+            db.run(`CREATE TABLE IF NOT EXISTS xp_transactions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                xp_amount INTEGER NOT NULL,
+                source TEXT NOT NULL,
+                reference_id INTEGER,
+                description TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )`);
+
+            // --- LESSON PROGRESS ---
+            db.run(`CREATE TABLE IF NOT EXISTS lesson_progress (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                lesson_id INTEGER NOT NULL,
+                is_completed BOOLEAN DEFAULT 0,
+                progress INTEGER DEFAULT 0,
+                time_spent INTEGER DEFAULT 0,
+                completed_at DATETIME,
+                xp_earned INTEGER DEFAULT 0,
+                last_accessed DATETIME,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE,
+                UNIQUE(user_id, lesson_id)
+            )`);
+
+            // --- USER STREAKS ---
+            db.run(`CREATE TABLE IF NOT EXISTS user_streaks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL UNIQUE,
+                current_streak INTEGER DEFAULT 0,
+                longest_streak INTEGER DEFAULT 0,
+                last_activity_date DATETIME,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )`);
+
+            // --- BOOKMARKS ---
+            db.run(`CREATE TABLE IF NOT EXISTS bookmarks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                item_id INTEGER NOT NULL,
+                item_type TEXT NOT NULL,
+                note TEXT,
+                folder_id INTEGER,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )`);
+
+            // --- LIKES ---
+            db.run(`CREATE TABLE IF NOT EXISTS likes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                item_id INTEGER NOT NULL,
+                item_type TEXT NOT NULL,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                UNIQUE(user_id, item_id, item_type)
+            )`);
+
+            // --- READING LIST ---
+            db.run(`CREATE TABLE IF NOT EXISTS reading_list (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                item_id INTEGER NOT NULL,
+                item_type TEXT NOT NULL,
+                added_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )`);
+
+            // --- BOOKMARK FOLDERS ---
+            db.run(`CREATE TABLE IF NOT EXISTS bookmark_folders (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                name TEXT NOT NULL,
+                icon TEXT DEFAULT '📁',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )`);
+
+            // --- USER ACTIVITY ---
+            db.run(`CREATE TABLE IF NOT EXISTS user_activity (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                activity_type TEXT NOT NULL, -- 'lesson_complete', 'quiz_pass', 'login', 'badge_earned'
+                description TEXT,
+                xp_earned INTEGER DEFAULT 0,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )`);
+
+            // --- USER GOALS ---
+            db.run(`CREATE TABLE IF NOT EXISTS user_goals (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                goal_type TEXT NOT NULL, -- 'xp', 'lessons', 'streak'
+                target_value INTEGER NOT NULL,
+                current_value INTEGER DEFAULT 0,
+                week_start_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+                is_completed BOOLEAN DEFAULT 0,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )`);
+
+            // --- NOTIFICATIONS ---
+            db.run(`CREATE TABLE IF NOT EXISTS notifications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                message TEXT NOT NULL,
+                type TEXT DEFAULT 'general' CHECK(type IN ('general', 'achievement', 'lesson', 'event', 'system')),
+                is_read BOOLEAN DEFAULT 0,
+                link TEXT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+            )`);
+
+            console.log('Database tables initialized (4-Level LMS Hierarchy + Events + Notifications Active)');
             // --- DISTINGUISHED MEMBERS ---
             db.run(`CREATE TABLE IF NOT EXISTS distinguished_members (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -349,6 +486,43 @@ function initializeDatabase() {
 
             // Migration: add image column to club_events if missing
             db.run(`ALTER TABLE club_events ADD COLUMN image TEXT`, () => { });
+
+            // Migration: add email verification columns to users
+            db.run(`ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0`, () => { });
+            db.run(`ALTER TABLE users ADD COLUMN verification_code TEXT`, () => { });
+            db.run(`ALTER TABLE users ADD COLUMN verification_expires DATETIME`, () => { });
+            db.run(`ALTER TABLE users ADD COLUMN student_id TEXT`, () => { });
+            db.run(`ALTER TABLE users ADD COLUMN college TEXT`, () => { });
+
+            // Migration: add full_name and certificates columns
+            db.run(`ALTER TABLE users ADD COLUMN full_name TEXT`, () => { });
+            db.run(`ALTER TABLE users ADD COLUMN certificates TEXT`, () => { });
+
+            // --- QUIZ RESULTS ---
+            db.run(`CREATE TABLE IF NOT EXISTS quiz_results (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                lesson_id INTEGER NOT NULL,
+                score INTEGER NOT NULL,
+                total_questions INTEGER NOT NULL,
+                passed BOOLEAN DEFAULT 0,
+                answers TEXT, -- JSON string of chosen options
+                attempt_number INTEGER DEFAULT 1,
+                completed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+                FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE
+            )`);
+
+            // Migration: add social_links and title columns
+            db.run(`ALTER TABLE users ADD COLUMN social_links TEXT DEFAULT '{}'`, () => { });
+            db.run(`ALTER TABLE users ADD COLUMN title TEXT`, () => { });
+
+            // Migration: add department and specializations columns
+            db.run(`ALTER TABLE users ADD COLUMN department TEXT`, () => { });
+            db.run(`ALTER TABLE users ADD COLUMN specializations TEXT DEFAULT '[]'`, () => { });
+
+            // Migration: add streak_days column
+            db.run(`ALTER TABLE users ADD COLUMN streak_days INTEGER DEFAULT 0`, () => { });
 
             resolve();
         });

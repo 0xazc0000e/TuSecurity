@@ -3,9 +3,29 @@ const { db } = require('../models/database');
 // Content Management
 
 const getAllContent = (req, res) => {
-    // Content table has been deprecated in favor of 'news' and 'lms' tables.
-    // Returning empty array to prevent SQL errors in legacy components.
-    res.json([]);
+    const { type, category } = req.query;
+    let query = 'SELECT * FROM content';
+    let params = [];
+
+    if (type) {
+        query += ' WHERE type = ?';
+        params.push(type);
+    }
+
+    if (category) {
+        query += type ? ' AND category = ?' : ' WHERE category = ?';
+        params.push(category);
+    }
+
+    query += ' ORDER BY created_at DESC';
+
+    db.all(query, params, (err, rows) => {
+        if (err) {
+            console.error('Get content error:', err);
+            return res.status(500).json({ error: 'Failed to fetch content' });
+        }
+        res.json(rows);
+    });
 };
 
 const createContent = (req, res) => {

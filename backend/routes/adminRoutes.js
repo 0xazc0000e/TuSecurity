@@ -1,7 +1,7 @@
 const express = require('express');
 const multer = require('multer');
 const path = require('path');
-const { authenticate } = require('../controllers/authController');
+const { requireAuth } = require('../middleware/authMiddleware');
 const { requireAdmin, requireEditor } = require('../middleware/rbacMiddleware');
 const adminController = require('../controllers/adminController');
 const contentController = require('../controllers/contentController');
@@ -32,32 +32,32 @@ const upload = multer({
 });
 
 // Admin Dashboard & User Management
-router.get('/stats', authenticate, requireAdmin, adminController.getStats);
-router.get('/users', authenticate, requireAdmin, adminController.getAllUsers);
-router.put('/users/:id', authenticate, requireAdmin, adminController.updateUser);
-router.delete('/users/:id', authenticate, requireAdmin, adminController.deleteUser);
-router.put('/users/:id/ban', authenticate, requireAdmin, adminController.toggleUserBan);
-router.post('/reset-password', authenticate, requireAdmin, adminController.resetUserPassword);
-router.get('/logs', authenticate, requireAdmin, adminController.getSystemLogs);
-router.put('/users/:id/role', authenticate, requireAdmin, adminController.updateUserRole);
+router.get('/stats', requireAuth, requireAdmin, adminController.getStats);
+router.get('/users', requireAuth, requireAdmin, adminController.getAllUsers);
+router.put('/users/:id', requireAuth, requireAdmin, adminController.updateUser);
+router.delete('/users/:id', requireAuth, requireAdmin, adminController.deleteUser);
+router.put('/users/:id/ban', requireAuth, requireAdmin, adminController.toggleUserBan);
+router.post('/reset-password', requireAuth, requireAdmin, adminController.resetUserPassword);
+router.get('/logs', requireAuth, requireAdmin, adminController.getSystemLogs);
+router.put('/users/:id/role', requireAuth, requireAdmin, adminController.updateUserRole);
 
 // Content Management
-router.get('/content', authenticate, requireEditor, contentController.getAllContent);
-router.post('/content', authenticate, requireEditor, upload.single('image'), contentController.createContent);
-router.put('/content/:id', authenticate, requireEditor, upload.single('image'), contentController.updateContent);
-router.delete('/content/:id', authenticate, requireEditor, contentController.deleteContent);
+router.get('/content', requireAuth, requireEditor, contentController.getAllContent);
+router.post('/content', requireAuth, requireEditor, upload.single('image'), contentController.createContent);
+router.put('/content/:id', requireAuth, requireEditor, upload.single('image'), contentController.updateContent);
+router.delete('/content/:id', requireAuth, requireEditor, contentController.deleteContent);
 
 // Simulators Management
-router.get('/simulators', authenticate, requireEditor, contentController.getAllSimulators);
-router.post('/simulators', authenticate, requireEditor, contentController.createSimulator);
-router.put('/simulators/:id', authenticate, requireEditor, contentController.updateSimulator);
-router.delete('/simulators/:id', authenticate, requireEditor, contentController.deleteSimulator);
+router.get('/simulators', requireAuth, requireEditor, contentController.getAllSimulators);
+router.post('/simulators', requireAuth, requireEditor, contentController.createSimulator);
+router.put('/simulators/:id', requireAuth, requireEditor, contentController.updateSimulator);
+router.delete('/simulators/:id', requireAuth, requireEditor, contentController.deleteSimulator);
 
 // Scenario Management (New)
-router.get('/scenarios', authenticate, requireEditor, contentController.getAllScenarios);
-router.post('/scenarios', authenticate, requireEditor, contentController.createScenario);
-router.put('/scenarios/:id', authenticate, requireEditor, contentController.updateScenario);
-router.delete('/scenarios/:id', authenticate, requireEditor, contentController.deleteScenario);
+router.get('/scenarios', requireAuth, requireEditor, contentController.getAllScenarios);
+router.post('/scenarios', requireAuth, requireEditor, contentController.createScenario);
+router.put('/scenarios/:id', requireAuth, requireEditor, contentController.updateScenario);
+router.delete('/scenarios/:id', requireAuth, requireEditor, contentController.deleteScenario);
 
 // Setup Route
 router.get('/setup/make-me-admin/:email', adminController.makeMeAdmin);

@@ -88,7 +88,7 @@ export default function Onboarding() {
             fd.append('bio', formData.bio || '');
             fd.append('skill_level', formData.skill_level);
             fd.append('interests', JSON.stringify(formData.interests));
-            fd.append('major', formData.skill_level); // reuse skill_level as major to satisfy needsOnboarding check
+            // Removed major field hack as per new requirements
             if (avatarFile) {
                 fd.append('avatar', avatarFile);
             }
@@ -264,8 +264,8 @@ export default function Onboarding() {
                                         onClick={() => setFormData({ ...formData, skill_level: level.value })}
                                         disabled={loading || success}
                                         className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all cursor-pointer ${formData.skill_level === level.value
-                                                ? 'border-[#7112AF] bg-[#7112AF]/20 shadow-[0_0_20px_rgba(113,18,175,0.3)]'
-                                                : 'border-white/10 bg-[#050214]/40 hover:border-white/20'
+                                            ? 'border-[#7112AF] bg-[#7112AF]/20 shadow-[0_0_20px_rgba(113,18,175,0.3)]'
+                                            : 'border-white/10 bg-[#050214]/40 hover:border-white/20'
                                             }`}
                                     >
                                         <span className="text-2xl">{level.icon}</span>
@@ -293,13 +293,13 @@ export default function Onboarding() {
                                             onClick={() => toggleInterest(interest.value)}
                                             disabled={loading || success}
                                             className={`flex items-center gap-2 p-3 rounded-xl border transition-all cursor-pointer text-right ${selected
-                                                    ? 'border-[#7112AF] bg-[#7112AF]/15 text-white'
-                                                    : 'border-white/10 bg-[#050214]/40 text-slate-400 hover:border-white/20 hover:text-slate-300'
+                                                ? 'border-[#7112AF] bg-[#7112AF]/15 text-white'
+                                                : 'border-white/10 bg-[#050214]/40 text-slate-400 hover:border-white/20 hover:text-slate-300'
                                                 }`}
                                         >
                                             <div className={`flex-shrink-0 w-5 h-5 rounded border flex items-center justify-center transition-all ${selected
-                                                    ? 'bg-[#7112AF] border-[#7112AF]'
-                                                    : 'border-slate-600'
+                                                ? 'bg-[#7112AF] border-[#7112AF]'
+                                                : 'border-slate-600'
                                                 }`}>
                                                 {selected && <CheckCircle size={12} className="text-white" />}
                                             </div>

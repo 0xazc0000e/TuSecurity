@@ -242,7 +242,10 @@ export const lmsAPI = {
     enroll: (data) => apiCall('/lms/enroll', { method: 'POST', body: JSON.stringify(data) }),
 
     // Lesson Completion
-    getCompletedLessons: () => apiCall('/lms/lessons/completed'),
+    getCompletedLessons: async () => {
+        const res = await apiCall('/lms/lessons/completed');
+        return res.completedLessons || [];
+    },
     markLessonComplete: (id) => apiCall(`/lms/lessons/${id}/complete`, { method: 'POST' }),
 };
 

@@ -1,7 +1,12 @@
 const jwt = require('jsonwebtoken');
 const { db } = require('../models/database');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'tu-cyber-security-secret-key-2024';
+const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!JWT_SECRET) {
+    console.error('ERROR: JWT_SECRET not set in rbacMiddleware');
+    process.exit(1);
+}
 
 // Role hierarchy (higher number = more permissions)
 const ROLE_HIERARCHY = {
@@ -53,6 +58,7 @@ const checkPermission = (requiredRole) => {
 
                     req.userId = decoded.id;
                     req.userRole = user.role;
+                    req.user = { id: decoded.id, ...user }; // Ensure req.user.id works and includes full user data
                     next();
                 }
             );
@@ -87,6 +93,8 @@ const requireAuth = (req, res, next) => {
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
         req.userId = decoded.id;
+        req.userRole = decoded.role;
+        req.user = { id: decoded.id, role: decoded.role }; // Standardized format
         next();
     } catch (error) {
         return res.status(401).json({ error: 'Invalid token' });

@@ -194,15 +194,31 @@ router.delete('/announcements/:id', (req, res) => {
 // REGISTRATIONS
 // ═══════════════════════════════════════════════
 
-// POST register for an event
+// POST register for an event - NOW WITH user_id
 router.post('/:id/register', (req, res) => {
     const eventId = req.params.id;
     const { name, email, phone, student_id, experience } = req.body;
     if (!name) return res.status(400).json({ error: 'الاسم مطلوب' });
 
+    // Extract user_id from JWT token if available
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+    let userId = null;
+    
+    if (token) {
+        try {
+            const jwt = require('jsonwebtoken');
+            const JWT_SECRET = process.env.JWT_SECRET || 'tu-cyber-security-secret-key-2024';
+            const decoded = jwt.verify(token, JWT_SECRET);
+            userId = decoded.id;
+        } catch (e) {
+            // Token invalid but continue without user_id
+        }
+    }
+
     db.run(
-        `INSERT INTO event_registrations (event_id, name, email, phone, student_id, experience) VALUES (?, ?, ?, ?, ?, ?)`,
-        [eventId, name, email, phone, student_id, experience],
+        `INSERT INTO event_registrations (event_id, user_id, name, email, phone, student_id, experience) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [eventId, userId, name, email, phone, student_id, experience],
         function (err) {
             if (err) return res.status(500).json({ error: err.message });
             // Auto-increment registered count

@@ -55,25 +55,52 @@ export const AboutClubSection = () => {
                     </div>
                 </div>
 
-                {/* Visual / Image Placeholder */}
-                <div className="lg:w-1/2 relative">
-                    <div className="absolute inset-0 bg-gradient-to-tr from-[#7112AF]/20 to-transparent rounded-3xl blur-2xl" />
-                    <div className="relative border border-white/10 bg-[#050214] p-8 rounded-3xl overflow-hidden aspect-video flex items-center justify-center group">
-                        {/* Abstract Visual Representation of "Identity" */}
-                        <div className="relative w-32 h-32">
-                            <div className="absolute inset-0 border-2 border-[#7112AF] rounded-full animate-ping opacity-20" />
-                            <div className="absolute inset-2 border-2 border-[#7112AF] rounded-full animate-spin duration-[10s]" />
-                            <div className="absolute inset-0 flex items-center justify-center">
-                                <Shield size={48} className="text-white drop-shadow-[0_0_15px_rgba(113,18,175,0.5)]" />
-                            </div>
-                        </div>
+                {/* Visual / Logo Section */}
+                <div className="lg:w-1/2 relative flex justify-center items-center">
+                    {/* Enhanced Glow Effects */}
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-[#7112AF] rounded-full blur-[100px] opacity-20 animate-pulse" />
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] bg-[#ff006e] rounded-full blur-[80px] opacity-15 mix-blend-screen" />
 
-                        <div className="absolute bottom-0 left-0 w-full p-6 bg-gradient-to-t from-[#050214] to-transparent">
-                            <p className="text-center text-slate-300 font-mono text-xs">
-                                EST. 2024 - TAIF UNIVERSITY
-                            </p>
+                    <motion.div
+                        initial={{ scale: 0.8, opacity: 0 }}
+                        whileInView={{ scale: 1, opacity: 1 }}
+                        transition={{ duration: 1, ease: "easeOut" }}
+                        className="relative z-10"
+                    >
+                        <div className="relative w-[350px] md:w-[500px] aspect-square flex items-center justify-center">
+                            {/* Animated Rings - No Box */}
+                            <div className="absolute inset-0 border border-white/5 rounded-full animate-[spin_8s_linear_infinite]" />
+                            <div className="absolute inset-8 border border-[#7112AF]/20 rounded-full animate-[spin_12s_linear_infinite_reverse]" />
+                            <div className="absolute inset-16 border border-[#ff006e]/10 rounded-full animate-[pulse_3s_ease-in-out_infinite]" />
+
+                            {/* Logo - Larger and clearer */}
+                            <img
+                                src="/logos/logo_web.png"
+                                alt="TuSecurity Club Logo"
+                                className="w-[140%] h-[140%] object-contain drop-shadow-[0_0_60px_rgba(113,18,175,0.5)] relative z-20 scale-110 hover:scale-125 transition-transform duration-700"
+                            />
+
+                            {/* Floating Particles/Decorations */}
+                            <motion.div
+                                animate={{ y: [-15, 15, -15], rotate: [0, 10, 0] }}
+                                transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
+                                className="absolute -top-12 -right-12 bg-[#050214]/60 backdrop-blur-sm border border-[#7112AF]/30 p-4 rounded-full shadow-[0_0_20px_rgba(113,18,175,0.2)]"
+                            >
+                                <Shield className="text-[#d4b3ff] w-8 h-8" />
+                            </motion.div>
+
+                            <motion.div
+                                animate={{ y: [15, -15, 15], rotate: [0, -10, 0] }}
+                                transition={{ duration: 6, repeat: Infinity, ease: "easeInOut", delay: 1 }}
+                                className="absolute -bottom-8 -left-8 bg-[#050214]/60 backdrop-blur-sm border border-[#ff006e]/30 p-4 rounded-full shadow-[0_0_20px_rgba(255,0,110,0.2)]"
+                            >
+                                <div className="text-white font-bold text-center leading-none">
+                                    <span className="block text-[10px] text-gray-400">EST</span>
+                                    <span className="text-lg text-[#ff006e]">2024</span>
+                                </div>
+                            </motion.div>
                         </div>
-                    </div>
+                    </motion.div>
                 </div>
 
             </div>

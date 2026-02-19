@@ -1,12 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Navigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { LayoutDashboard, BookOpen, Calendar, Bookmark, Settings, LogOut, User as UserIcon } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { User as UserIcon } from 'lucide-react';
 import { useAuth, apiCall } from '../context/AuthContext';
 import { MatrixBackground } from '../components/ui/MatrixBackground';
-import { getApiImageUrl } from '../utils/imageUtils';
+import { getRank } from '../utils/rankUtils';
+import { ProfileHeader } from '../components/dashboard/ProfileHeader';
+import { XPProgressCard } from '../components/dashboard/XPProgressCard';
+import { ProfileSidebar } from '../components/dashboard/ProfileSidebar';
 
-// Components
+// Enhanced Components
 import { DashboardOverview } from '../components/dashboard/DashboardOverview';
 import { MyLearning } from '../components/dashboard/MyLearning';
 import { DashboardEvents } from '../components/dashboard/DashboardEvents';
@@ -14,87 +17,221 @@ import { SavedItems } from '../components/dashboard/SavedItems';
 import { ProfileSettings } from '../components/dashboard/ProfileSettings';
 
 export default function Profile() {
-    const { user, login } = useAuth(); // login used here to update user state if needed
+    const { user, logout } = useAuth();
     const [activeTab, setActiveTab] = useState('overview');
     const [profileData, setProfileData] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [xpData, setXpData] = useState({
+        totalXP: 0,
+        weeklyXP: 0,
+        monthlyXP: 0,
+        rank: 'مبتدئ',
+        nextRankXP: 1000,
+        streakDays: 0,
+        completedLessons: 0,
+        completedSimulators: 0,
+        savedArticles: 0,
+        recentActivity: []
+    });
 
-    const fetchProfile = async () => {
+    // Fetch comprehensive profile data including XP from all sources
+    const fetchProfileData = useCallback(async () => {
         try {
-            const data = await apiCall('/auth/profile');
-            setProfileData(data);
+            setLoading(true);
+
+            // Fetch main profile
+            const profile = await apiCall('/auth/profile');
+            setProfileData(profile);
+
+            // Fetch comprehensive XP data from all sources
+            const xpStats = await apiCall('/user/xp-stats').catch(() => ({
+                totalXP: profile.total_xp || 0,
+                weeklyXP: 0,
+                monthlyXP: 0,
+                sources: {}
+            }));
+
+            // Fetch events
+            const events = await apiCall('/profile/events').catch(() => []);
+
+            // Fetch learning progress
+            const progress = await apiCall('/user/learning-progress').catch(() => ({
+                enrollments: [],
+                completedLessons: 0,
+                completedTracks: 0,
+                currentStreak: 0
+            }));
+
+            // Fetch saved items count
+            const saved = await apiCall('/user/saved-count').catch(() => ({
+                bookmarks: 0,
+                likes: 0
+            }));
+
+            setProfileData({ ...profile, events });
+
+            // Calculate rank based on total XP
+            const totalXP = xpStats.totalXP || profile.total_xp || 0;
+            const rank = getRank(totalXP);
+
+            setXpData({
+                totalXP,
+                weeklyXP: xpStats.weeklyXP || 0,
+                monthlyXP: xpStats.monthlyXP || 0,
+                rank: rank.title,
+                rankColor: rank.color,
+                rankIcon: rank.icon,
+                nextRankXP: rank.nextLevel,
+                streakDays: progress.currentStreak || 0,
+                completedLessons: Array.isArray(progress.completedLessons) ? progress.completedLessons.length : (progress.completedLessons || 0),
+                completedSimulators: profile.completed_simulators || 0,
+                savedArticles: saved.bookmarks || 0,
+                recentActivity: xpStats.recentActivity || []
+            });
+
         } catch (error) {
-            console.error('Failed to load profile', error);
+            console.error('Failed to load profile data:', error);
         } finally {
             setLoading(false);
         }
-    };
-
-    useEffect(() => {
-        fetchProfile();
     }, []);
 
+    useEffect(() => {
+        fetchProfileData();
+
+        // Set up interval to refresh data every 30 seconds
+        const interval = setInterval(fetchProfileData, 30000);
+        return () => clearInterval(interval);
+    }, [fetchProfileData]);
+
     const handleProfileUpdate = (updatedUser) => {
-        // Update local state and optionally AuthContext
         setProfileData(prev => ({ ...prev, ...updatedUser }));
-        // Just reload to be safe and sync everything
-        window.location.reload();
+        fetchProfileData();
     };
 
-    if (loading) return <div className="min-h-screen bg-black flex items-center justify-center text-white">Loading...</div>;
-    if (!user) return <Navigate to="/login" replace />;
+    const handleLogout = () => {
+        logout();
+        window.location.href = '/login';
+    };
 
-    const tabs = [
-        { id: 'overview', label: 'نظرة عامة', icon: LayoutDashboard },
-        { id: 'learning', label: 'مساراتي', icon: BookOpen },
-        { id: 'events', label: 'الفعاليات', icon: Calendar },
-        { id: 'saved', label: 'المحفوظات', icon: Bookmark },
-        { id: 'settings', label: 'الإعدادات', icon: Settings },
-    ];
-
-    return (
-        <div className="min-h-screen pt-24 pb-12 px-6 relative" dir="rtl">
-            <MatrixBackground />
-
-            <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 relative z-10">
-                {/* Sidebar */}
-                <div className="lg:col-span-3 space-y-6">
-                    {/* User Card */}
-                    <div className="bg-[#0f0f16]/80 backdrop-blur-xl border border-white/10 rounded-2xl p-6 text-center">
-                        <div className="w-24 h-24 rounded-full border-2 border-purple-500 mx-auto mb-4 overflow-hidden p-1">
-                            <img src={getApiImageUrl(profileData.avatar)} alt="Profile" className="w-full h-full rounded-full object-cover" />
-                        </div>
-                        <h2 className="text-xl font-bold text-white mb-1">{profileData.username}</h2>
-                        <span className="text-xs text-purple-400 font-bold px-3 py-1 bg-purple-500/10 rounded-full border border-purple-500/20">
-                            {user.role === 'admin' ? 'مدير النظام' : 'عضو نشط'}
-                        </span>
-
-                        <div className="mt-6 flex flex-col gap-2">
-                            {tabs.map(tab => (
-                                <button key={tab.id} onClick={() => setActiveTab(tab.id)}
-                                    className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-bold text-sm ${activeTab === tab.id
-                                        ? 'bg-purple-600 text-white shadow-lg shadow-purple-600/20'
-                                        : 'text-gray-400 hover:text-white hover:bg-white/5'}`}>
-                                    <tab.icon size={18} /> {tab.label}
-                                </button>
-                            ))}
+    if (loading) {
+        return (
+            <div className="min-h-screen bg-gradient-to-br from-gray-950 via-black to-gray-900 flex items-center justify-center">
+                <motion.div
+                    initial={{ opacity: 0, scale: 0.9 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="text-center"
+                >
+                    <div className="relative w-20 h-20 mx-auto mb-6">
+                        <motion.div
+                            animate={{ rotate: 360 }}
+                            transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                            className="w-full h-full rounded-full border-4 border-purple-500/20 border-t-purple-500"
+                        />
+                        <div className="absolute inset-0 flex items-center justify-center">
+                            <UserIcon className="w-8 h-8 text-purple-500" />
                         </div>
                     </div>
-                </div>
+                    <p className="text-white font-bold">جاري تحميل الملف الشخصي...</p>
+                </motion.div>
+            </div>
+        );
+    }
 
-                {/* Main Content */}
-                <div className="lg:col-span-9">
+    if (!user) return <Navigate to="/login" replace />;
+
+    return (
+        <div className="min-h-screen bg-gradient-to-br from-gray-950 via-black to-gray-900 pt-24 pb-12 px-4 sm:px-6 relative overflow-hidden" dir="rtl">
+            <MatrixBackground opacity={0.03} />
+
+            {/* Animated Background Elements */}
+            <div className="fixed inset-0 overflow-hidden pointer-events-none">
+                <motion.div
+                    animate={{
+                        x: [0, 100, 0],
+                        y: [0, -50, 0],
+                        opacity: [0.1, 0.3, 0.1]
+                    }}
+                    transition={{ duration: 15, repeat: Infinity }}
+                    className="absolute top-20 left-10 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl"
+                />
+                <motion.div
+                    animate={{
+                        x: [0, -50, 0],
+                        y: [0, 100, 0],
+                        opacity: [0.1, 0.2, 0.1]
+                    }}
+                    transition={{ duration: 20, repeat: Infinity }}
+                    className="absolute bottom-20 right-10 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl"
+                />
+            </div>
+
+            <div className="max-w-7xl mx-auto relative z-10">
+                <ProfileHeader
+                    profileData={profileData}
+                    user={user}
+                    xpData={xpData}
+                    onLogout={handleLogout}
+                />
+
+                <XPProgressCard xpData={xpData} />
+
+                {/* Main Grid Layout */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                    <ProfileSidebar
+                        activeTab={activeTab}
+                        setActiveTab={setActiveTab}
+                    />
+
+                    {/* Main Content Area */}
                     <motion.div
-                        key={activeTab}
-                        initial={{ opacity: 0, y: 10 }}
+                        initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.3 }}
+                        transition={{ delay: 0.3 }}
+                        className="lg:col-span-9"
                     >
-                        {activeTab === 'overview' && <DashboardOverview user={profileData} progress={profileData.progress} />}
-                        {activeTab === 'learning' && <MyLearning enrollments={profileData.enrollments} />}
-                        {activeTab === 'events' && <DashboardEvents events={profileData.events} />}
-                        {activeTab === 'saved' && <SavedItems likes={profileData.likes} bookmarks={profileData.bookmarks} />}
-                        {activeTab === 'settings' && <ProfileSettings user={profileData} onUpdate={handleProfileUpdate} />}
+                        <AnimatePresence mode="wait">
+                            <motion.div
+                                key={activeTab}
+                                initial={{ opacity: 0, y: 10, scale: 0.98 }}
+                                animate={{ opacity: 1, y: 0, scale: 1 }}
+                                exit={{ opacity: 0, y: -10, scale: 0.98 }}
+                                transition={{ duration: 0.3 }}
+                                className="bg-gray-900/40 backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-2xl min-h-[500px]"
+                            >
+                                {activeTab === 'overview' && (
+                                    <DashboardOverview
+                                        user={profileData}
+                                        xpData={xpData}
+                                        progress={profileData?.progress}
+                                    />
+                                )}
+                                {activeTab === 'learning' && (
+                                    <MyLearning
+                                        enrollments={profileData?.enrollments}
+                                        onProgressUpdate={fetchProfileData}
+                                    />
+                                )}
+                                {activeTab === 'saved' && (
+                                    <SavedItems
+                                        likes={profileData?.likes}
+                                        bookmarks={profileData?.bookmarks}
+                                        onUpdate={fetchProfileData}
+                                    />
+                                )}
+                                {activeTab === 'events' && (
+                                    <DashboardEvents
+                                        events={profileData?.events}
+                                    />
+                                )}
+                                {activeTab === 'settings' && (
+                                    <ProfileSettings
+                                        user={profileData}
+                                        onUpdate={handleProfileUpdate}
+                                    />
+                                )}
+                            </motion.div>
+                        </AnimatePresence>
                     </motion.div>
                 </div>
             </div>

@@ -6,10 +6,9 @@ import {
     Terminal, HelpCircle, Image, Play, Search, Filter, BarChart2, Clock,
     User, Link, Hash, Palette, Check, AlertCircle, FolderOpen, File, CheckCircle
 } from 'lucide-react';
-import axios from 'axios';
+import { lmsAPI } from '../../services/api';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-const API = `${API_BASE}/lms`;
 
 // ─── Sidebar Sections ─────────────────────────────────────
 const SECTIONS = [
@@ -70,9 +69,9 @@ function TracksSection() {
 
     const load = useCallback(async () => {
         try {
-            const res = await axios.get(`${API}/syllabus`);
-            setSyllabus(Array.isArray(res.data) ? res.data : []);
-        } catch (e) { console.error(e); setStatus('❌ فشل تحميل المنهج: ' + (e.response?.data?.error || e.message)); }
+            const data = await lmsAPI.getSyllabus();
+            setSyllabus(Array.isArray(data) ? data : []);
+        } catch (e) { console.error(e); setStatus('❌ فشل تحميل المنهج: ' + (e.message)); }
     }, []);
 
     useEffect(() => { load(); }, [load]);
@@ -80,28 +79,32 @@ function TracksSection() {
     const handleAdd = async (type) => {
         if (!newName.trim()) return;
         try {
-            if (type === 'track') await axios.post(`${API}/tracks`, { title: newName });
-            if (type === 'course') await axios.post(`${API}/courses`, { track_id: sel.track.id, title: newName });
-            if (type === 'unit') await axios.post(`${API}/units`, { course_id: sel.course.id, title: newName });
+            if (type === 'track') await lmsAPI.createTrack({ title: newName });
+            if (type === 'course') await lmsAPI.createCourse({ track_id: sel.track.id, title: newName });
+            if (type === 'unit') await lmsAPI.createUnit({ course_id: sel.course.id, title: newName });
             setNewName(''); setAddingTo(null);
             setStatus('✅ تمت الإضافة'); setTimeout(() => setStatus(''), 2000);
             load();
         } catch (e) {
             console.error(e);
-            setStatus('❌ فشلت الإضافة: ' + (e.response?.data?.error || e.message));
+            setStatus('❌ فشلت الإضافة: ' + (e.message));
         }
     };
 
     const handleDelete = async (type, id) => {
         if (!confirm('حذف؟')) return;
         try {
-            await axios.delete(`${API}/${type}/${id}`);
+            if (type === 'tracks') await lmsAPI.deleteTrack(id);
+            if (type === 'courses') await lmsAPI.deleteCourse(id);
+            if (type === 'units') await lmsAPI.deleteUnit(id);
+            if (type === 'lessons') await lmsAPI.deleteLesson(id);
+
             if (type === 'tracks') setSel(p => ({ ...p, track: null, course: null, unit: null, lesson: null }));
             if (type === 'courses') setSel(p => ({ ...p, course: null, unit: null, lesson: null }));
             if (type === 'units') setSel(p => ({ ...p, unit: null, lesson: null }));
             if (type === 'lessons') setSel(p => ({ ...p, lesson: null }));
             load();
-        } catch (e) { console.error(e); }
+        } catch (e) { console.error(e); setStatus('❌ فشل الحذف'); }
     };
 
     const handleSaveLesson = async () => {
@@ -116,15 +119,15 @@ function TracksSection() {
         };
         try {
             if (editLesson.id) {
-                await axios.put(`${API}/lessons/${editLesson.id}`, payload);
+                await lmsAPI.updateLesson(editLesson.id, payload);
             } else {
-                await axios.post(`${API}/lessons`, { ...payload, unit_id: sel.unit.id });
+                await lmsAPI.createLesson({ ...payload, unit_id: sel.unit.id });
             }
             setStatus('✅ تم حفظ الدرس بنجاح'); setTimeout(() => setStatus(''), 3000);
             setEditLesson(null); load();
         } catch (e) {
             console.error(e);
-            setStatus('❌ فشل حفظ الدرس: ' + (e.response?.data?.error || e.message));
+            setStatus('❌ فشل حفظ الدرس: ' + (e.message));
         }
     };
 
@@ -139,7 +142,7 @@ function TracksSection() {
             };
         }));
         try {
-            await axios.post(`${API}/lessons/bulk`, { lessons });
+            await lmsAPI.bulkUploadLessons({ lessons });
             setBulkFiles([]); setShowBulk(false); load();
         } catch (e) { console.error(e); }
     };
@@ -554,14 +557,14 @@ function RecordedCoursesSection() {
     const [editing, setEditing] = useState(null);
     const [allTags, setAllTags] = useState([]);
     const [status, setStatus] = useState('');
+
+    // Convert to useCallback or just call in useEffect
     const load = async () => {
         try {
-            const [r, t] = await Promise.all([
-                axios.get(`${API}/recorded-courses`),
-                axios.get(`${API}/tags`)
-            ]);
-            setItems(Array.isArray(r.data) ? r.data : []);
-            setAllTags(Array.isArray(t.data) ? t.data : []);
+            const r = await lmsAPI.getRecordedCourses();
+            const t = await lmsAPI.getTags();
+            setItems(Array.isArray(r) ? r : []);
+            setAllTags(Array.isArray(t) ? t : []);
         } catch (e) { console.error(e); setStatus('❌ فشل التحميل'); }
     };
     useEffect(() => { load(); }, []);
@@ -583,15 +586,15 @@ function RecordedCoursesSection() {
         if (!editing) return;
         try {
             const payload = { ...editing, tags: parseItemTags(editing) };
-            if (editing.id) await axios.put(`${API}/recorded-courses/${editing.id}`, payload);
-            else await axios.post(`${API}/recorded-courses`, payload);
+            if (editing.id) await lmsAPI.updateRecordedCourse(editing.id, payload);
+            else await lmsAPI.createRecordedCourse(payload);
             setEditing(null); setStatus('✅ تم الحفظ'); load();
             setTimeout(() => setStatus(''), 2000);
-        } catch (e) { console.error(e); setStatus('❌ فشل الحفظ: ' + (e.response?.data?.error || e.message)); }
+        } catch (e) { console.error(e); setStatus('❌ فشل الحفظ: ' + (e.message)); }
     };
     const del = async (id) => {
         if (confirm('حذف؟')) {
-            try { await axios.delete(`${API}/recorded-courses/${id}`); load(); } catch (e) { console.error(e); }
+            try { await lmsAPI.deleteRecordedCourse(id); load(); } catch (e) { console.error(e); }
         }
     };
 
@@ -672,15 +675,17 @@ function ArticlesSection() {
     const [selectedFile, setSelectedFile] = useState(null);
     const [allTags, setAllTags] = useState([]);
     const [status, setStatus] = useState('');
+
     const load = async () => {
         try {
-            const [r, t] = await Promise.all([
-                axios.get(`${API}/articles`),
-                axios.get(`${API}/tags`)
-            ]);
-            setItems(Array.isArray(r.data) ? r.data : []);
-            setAllTags(Array.isArray(t.data) ? t.data : []);
-        } catch (e) { console.error(e); setStatus('❌ فشل التحميل'); }
+            const r = await lmsAPI.getArticles();
+            const t = await lmsAPI.getTags();
+            setItems(Array.isArray(r) ? r : []);
+            setAllTags(Array.isArray(t) ? t : []);
+        } catch (e) {
+            console.error(e);
+            setStatus('❌ فشل التحميل');
+        }
     };
     useEffect(() => { load(); }, []);
 
@@ -711,27 +716,28 @@ function ArticlesSection() {
             if (selectedFile) {
                 formData.append('cover_image', selectedFile);
             } else if (editing.cover_image) {
+                // If existing image, we might not need to send it again or send it as string
+                // But if we want to update other fields, FormData handles it.
+                // If it's a URL string, append it.
                 formData.append('cover_image', editing.cover_image);
             }
 
-            const token = localStorage.getItem('token');
-            const headers = { 'Authorization': `Bearer ${token}` };
-
-            const url = editing.id ? `${API}/articles/${editing.id}` : `${API}/articles`;
-            const method = editing.id ? 'PUT' : 'POST';
-
-            await axios({ method, url, data: formData, headers });
+            if (editing.id) {
+                await lmsAPI.updateArticle(editing.id, formData);
+            } else {
+                await lmsAPI.createArticle(formData);
+            }
 
             setEditing(null); setSelectedFile(null); setStatus('✅ تم الحفظ'); load();
             setTimeout(() => setStatus(''), 2000);
         } catch (e) {
             console.error(e);
-            setStatus('❌ فشل الحفظ: ' + (e.response?.data?.error || e.message));
+            setStatus('❌ فشل الحفظ: ' + (e.message));
         }
     };
     const del = async (id) => {
         if (confirm('حذف؟')) {
-            try { await axios.delete(`${API}/articles/${id}`); load(); } catch (e) { console.error(e); }
+            try { await lmsAPI.deleteArticle(id); load(); } catch (e) { console.error(e); }
         }
     };
     const importMd = () => {
@@ -799,60 +805,47 @@ function ArticlesSection() {
                                 className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-lg cursor-pointer hover:bg-white/10 transition-colors text-sm text-gray-300"
                             >
                                 <Upload size={16} />
-                                <span>{selectedFile ? selectedFile.name : 'رفع صورة من الجهاز'}</span>
+                                {selectedFile ? selectedFile.name : 'اختر صورة'}
                             </label>
-                            <span className="text-xs text-gray-500">أو</span>
-                            <input
-                                type="text"
-                                value={editing.cover_image || ''}
-                                onChange={e => setEditing(p => ({ ...p, cover_image: e.target.value }))}
-                                placeholder="رابط خارجي (https://...)"
-                                className="flex-1 px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:border-purple-500 focus:outline-none"
+                            {editing.cover_image && !selectedFile && (
+                                <span className="text-gray-500 text-xs truncate max-w-[150px]">{editing.cover_image}</span>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-3">
+                        <div className="col-span-2 space-y-2">
+                            <textarea
+                                value={editing.content || ''}
+                                onChange={e => setEditing(p => ({ ...p, content: e.target.value }))}
+                                rows={10}
+                                className="w-full px-3 py-2 bg-[#0a0a12] border border-white/10 rounded-lg text-white text-sm font-mono focus:border-orange-500 focus:outline-none resize-y"
+                                placeholder="# محتوى المقال (MD)..."
                             />
                         </div>
-                        {(selectedFile || editing.cover_image) && (
-                            <div className="mt-2 text-xs text-green-400 flex items-center gap-1">
-                                <CheckCircle size={10} /> {selectedFile ? 'تم تحديد ملف' : 'رابط الصورة جاهز'}
+                        <div className="space-y-2">
+                            <Btn variant="ghost" onClick={importMd} className="w-full justify-center"><FolderOpen size={14} /> استيراد ملف MD</Btn>
+                            <div className="space-y-1">
+                                <label className="text-xs text-gray-400">التصنيفات</label>
+                                <div className="flex flex-wrap gap-1">
+                                    {allTags.map(tag => (
+                                        <button key={tag.id} onClick={() => toggleTag(tag.name)}
+                                            className={`px-2 py-1 rounded text-[10px] border ${parseItemTags(editing).includes(tag.name) ? 'border-orange-500 bg-orange-500/20 text-orange-300' : 'border-white/10 text-gray-500'}`}>
+                                            {tag.name}
+                                        </button>
+                                    ))}
+                                </div>
                             </div>
-                        )}
-                    </div>
-                    {/* Tag selector */}
-                    <div>
-                        <label className="text-xs text-gray-400 block mb-1.5">التصنيفات</label>
-                        <div className="flex flex-wrap gap-1.5">
-                            {allTags.map(tag => {
-                                const selected = parseItemTags(editing).includes(tag.name);
-                                return (
-                                    <button key={tag.id} onClick={() => toggleTag(tag.name)}
-                                        className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold border transition-all ${selected
-                                            ? 'border-orange-500 bg-orange-500/20 text-orange-300'
-                                            : 'border-white/10 bg-white/5 text-gray-400 hover:bg-white/10'}`}>
-                                        <Hash size={10} />
-                                        {tag.name}
-                                        {selected && <Check size={10} className="text-green-400" />}
-                                    </button>
-                                );
-                            })}
-                            {allTags.length === 0 && <span className="text-xs text-gray-600">لا توجد تصنيفات — أضف تصنيفات من قسم التصنيفات أولاً</span>}
                         </div>
                     </div>
-                    <div>
-                        <div className="flex items-center justify-between mb-1">
-                            <label className="text-xs text-gray-400">محتوى المقال (Markdown)</label>
-                            <Btn variant="ghost" size="sm" onClick={importMd}><FolderOpen size={12} /> استيراد .md</Btn>
-                        </div>
-                        <textarea value={editing.content || ''} rows={10}
-                            onChange={e => setEditing(p => ({ ...p, content: e.target.value }))}
-                            className="w-full px-3 py-2 bg-[#0a0a12] border border-white/10 rounded-lg text-white text-sm font-mono focus:border-purple-500 focus:outline-none resize-y" />
-                    </div>
+
                     <div className="flex justify-end gap-2">
-                        <Btn variant="ghost" onClick={() => setEditing(null)}><X size={14} /> إلغاء</Btn>
+                        <Btn variant="ghost" onClick={() => { setEditing(null); setSelectedFile(null); }}><X size={14} /> إلغاء</Btn>
                         <Btn onClick={save}><Save size={14} /> حفظ</Btn>
                     </div>
                 </div>
-            )
-            }
-        </div >
+            )}
+        </div>
     );
 }
 
@@ -862,84 +855,97 @@ function ArticlesSection() {
 function TagsSection() {
     const [tags, setTags] = useState([]);
     const [newTag, setNewTag] = useState({ name: '', color: '#7112AF', type: 'general' });
-    const load = async () => { try { const r = await axios.get(`${API}/tags`); setTags(r.data || []); } catch (e) { console.error(e); } };
+    const [status, setStatus] = useState('');
+
+    const load = async () => {
+        try {
+            const data = await lmsAPI.getTags();
+            setTags(Array.isArray(data) ? data : []);
+        } catch (e) { console.error(e); }
+    };
     useEffect(() => { load(); }, []);
 
     const add = async () => {
         if (!newTag.name.trim()) return;
-        await axios.post(`${API}/tags`, newTag);
-        setNewTag({ name: '', color: '#7112AF', type: 'general' }); load();
+        try {
+            await lmsAPI.createTag(newTag);
+            setNewTag({ name: '', color: '#7112AF', type: 'general' });
+            load(); setStatus('✅ تم'); setTimeout(() => setStatus(''), 2000);
+        } catch (e) {
+            console.error(e);
+            setStatus('❌ خطأ');
+        }
     };
-    const del = async (id) => { await axios.delete(`${API}/tags/${id}`); load(); };
+
+    const del = async (id) => {
+        if (confirm('حذف؟')) {
+            try { await lmsAPI.deleteTag(id); load(); } catch (e) { console.error(e); }
+        }
+    };
 
     return (
         <div className="space-y-4" dir="rtl">
-            <h3 className="text-lg font-bold text-white flex items-center gap-2"><Tags size={20} className="text-purple-400" /> التصنيفات</h3>
-            <p className="text-xs text-gray-500">التصنيفات تظهر كفلاتر في صفحة قاعدة المعرفة للمستخدمين</p>
-            <div className="flex gap-2 items-end">
-                <div className="flex-1"><Field label="اسم التصنيف" value={newTag.name} onChange={v => setNewTag(p => ({ ...p, name: v }))} /></div>
-                <div className="w-20">
-                    <label className="text-xs text-gray-400 block mb-1">اللون</label>
-                    <input type="color" value={newTag.color} onChange={e => setNewTag(p => ({ ...p, color: e.target.value }))}
-                        className="w-full h-9 bg-transparent border border-white/10 rounded-lg cursor-pointer" />
+            <h3 className="text-lg font-bold text-white flex items-center gap-2"><Tags size={20} className="text-pink-400" /> إدارة التصنيفات</h3>
+            {status && <span className="text-xs text-green-400">{status}</span>}
+            <div className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-end gap-3">
+                <div className="flex-1">
+                    <Field label="اسم التصنيف" value={newTag.name} onChange={v => setNewTag(p => ({ ...p, name: v }))} placeholder="مثال: شبكات, برمجة..." />
                 </div>
                 <div className="w-32">
-                    <label className="text-xs text-gray-400 block mb-1">النوع</label>
-                    <select value={newTag.type} onChange={e => setNewTag(p => ({ ...p, type: e.target.value }))}
-                        className="w-full px-2 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none">
-                        <option value="general">عام</option>
-                        <option value="track">مسار</option>
-                        <option value="course">دورة</option>
-                        <option value="article">مقال</option>
-                    </select>
+                    <Field label="لون (Hex)" value={newTag.color} onChange={v => setNewTag(p => ({ ...p, color: v }))} placeholder="#RRGGBB" />
                 </div>
                 <Btn onClick={add}><Plus size={14} /> إضافة</Btn>
             </div>
             <div className="flex flex-wrap gap-2">
                 {tags.map(tag => (
-                    <span key={tag.id} className="flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-bold border"
-                        style={{ backgroundColor: tag.color + '20', borderColor: tag.color + '40', color: tag.color }}>
-                        <Hash size={12} /> {tag.name}
-                        <button onClick={() => del(tag.id)} className="hover:opacity-60"><X size={12} /></button>
-                    </span>
+                    <div key={tag.id} className="flex items-center gap-2 bg-white/5 border border-white/10 px-3 py-1.5 rounded-lg">
+                        <div className="w-3 h-3 rounded-full" style={{ backgroundColor: tag.color }}></div>
+                        <span className="text-sm text-gray-300">{tag.name}</span>
+                        <button onClick={() => del(tag.id)} className="text-red-400 hover:text-white ml-2"><X size={12} /></button>
+                    </div>
                 ))}
-                {tags.length === 0 && <span className="text-gray-600 text-sm">لا توجد تصنيفات</span>}
             </div>
         </div>
     );
 }
 
 // ═══════════════════════════════════════════════════════════
-//  MAIN COMPONENT — LmsManagement
+//  MAIN COMPONENT
 // ═══════════════════════════════════════════════════════════
 export default function LmsManagement() {
     const [activeSection, setActiveSection] = useState('tracks');
 
     return (
-        <div className="flex gap-4 h-full" dir="rtl">
-            {/* Sidebar */}
-            <div className="w-56 flex-shrink-0 space-y-1">
-                {SECTIONS.map(sec => {
-                    const Icon = sec.icon;
-                    return (
-                        <button key={sec.id} onClick={() => setActiveSection(sec.id)}
-                            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all ${activeSection === sec.id
-                                ? 'bg-gradient-to-l from-purple-600/20 to-pink-600/10 text-white border border-purple-500/30 shadow-lg shadow-purple-500/10'
-                                : 'text-gray-400 hover:bg-white/5 hover:text-white'
-                                }`}>
-                            <Icon size={18} className={activeSection === sec.id ? 'text-purple-400' : ''} />
-                            {sec.label}
-                        </button>
-                    );
-                })}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6" dir="rtl">
+            {/* Sidebar Navigation */}
+            <div className="lg:col-span-1 space-y-2">
+                {SECTIONS.map(section => (
+                    <button
+                        key={section.id}
+                        onClick={() => setActiveSection(section.id)}
+                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-bold ${activeSection === section.id
+                            ? 'bg-gradient-to-r from-purple-500/20 to-pink-500/20 border border-purple-500/50 text-white shadow-lg shadow-purple-900/20'
+                            : 'bg-white/5 border border-white/10 text-gray-400 hover:bg-white/10 hover:text-white'
+                            }`}
+                    >
+                        <section.icon size={18} className={activeSection === section.id ? 'text-purple-400' : 'text-gray-500'} />
+                        {section.label}
+                        {activeSection === section.id && <ChevronLeft size={16} className="mr-auto text-purple-400" />}
+                    </button>
+                ))}
             </div>
 
-            {/* Content */}
-            <div className="flex-1 min-w-0">
+            {/* Main Content Area */}
+            <div className="lg:col-span-3">
                 <AnimatePresence mode="wait">
-                    <motion.div key={activeSection}
-                        initial={{ opacity: 0, x: 10 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -10 }}
-                        transition={{ duration: 0.2 }}>
+                    <motion.div
+                        key={activeSection}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: 20 }}
+                        transition={{ duration: 0.2 }}
+                        className="bg-[#0a0a0f] border border-white/10 rounded-2xl p-6 min-h-[600px]"
+                    >
                         {activeSection === 'tracks' && <TracksSection />}
                         {activeSection === 'recorded' && <RecordedCoursesSection />}
                         {activeSection === 'articles' && <ArticlesSection />}

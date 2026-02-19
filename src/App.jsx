@@ -4,14 +4,17 @@ import Layout from './layouts/Layout';
 import Home from './pages/Home';
 import HomeNew from './pages/HomeNew';
 import Login from './pages/Login';
-import Register from './pages/Register';
+import Signup from './pages/Signup';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
+
 import SimulatorsHub from './pages/SimulatorsHub';
 import KnowledgeBase from './pages/KnowledgeBase';
 import About from './pages/About';
 import AdminAdvanced from './pages/AdminAdvanced';
 import Profile from './pages/Profile';
 import ClubActivities from './pages/ClubActivities';
-import Onboarding from './pages/Onboarding';
+import CompleteProfile from './pages/CompleteProfile';
 import ProtectedRoute from './components/ProtectedRoute';
 import { AuthProvider } from './context/AuthContext';
 import { AnalyticsProvider } from './context/AnalyticsContext';
@@ -57,10 +60,14 @@ function AppContent() {
                         }
                     />
                     <Route path="profile" element={<Profile />} />
+
                     <Route path="activities" element={<ClubActivities />} />
                     <Route path="login" element={<Login />} />
-                    <Route path="register" element={<Register />} />
-                    <Route path="onboarding" element={<Onboarding />} />
+                    <Route path="/register" element={<Signup />} />
+                    <Route path="/forgot-password" element={<ForgotPassword />} />
+                    <Route path="/reset-password" element={<ResetPassword />} />
+                    <Route path="/onboarding" element={<CompleteProfile />} />
+                    <Route path="/complete-profile" element={<CompleteProfile />} />
                     <Route path="simulators/*" element={<SimulatorsHub />} />
                 </Route>
             </Routes>
