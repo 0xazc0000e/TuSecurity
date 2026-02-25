@@ -1,10 +1,12 @@
 // API Service Layer
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
 // Generic API call helper
 async function apiCall(endpoint, options = {}, token = null) {
-    const url = `${API_BASE_URL}${endpoint}`;
+    // Ensure endpoint starts with /api for consistency
+    const normalizedEndpoint = endpoint.startsWith('/api') ? endpoint : `/api${endpoint}`;
+    const url = `${API_BASE_URL}${normalizedEndpoint}`;
 
     const config = {
         headers: {
