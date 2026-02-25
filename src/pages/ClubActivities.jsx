@@ -13,8 +13,11 @@ import {
 import { MatrixBackground } from '../components/ui/MatrixBackground';
 import { useNavigate } from 'react-router-dom';
 import { eventsAPI, distinguishedAPI, newsAPI } from '../services/api';
+import { getApiImageUrl } from '../utils/imageUtils';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { useAuth } from '../context/AuthContext';
+import { MarkdownEditorModal } from '../components/ui/MarkdownEditorModal';
 
 export default function ClubActivities() {
     const navigate = useNavigate();
@@ -37,6 +40,11 @@ export default function ClubActivities() {
     const [announcements, setAnnouncements] = useState([]);
     const [news, setNews] = useState([]);
     const [expandedNews, setExpandedNews] = useState(null);
+    const [showEditorModal, setShowEditorModal] = useState(false);
+
+    // Auth
+    const { user, apiCall } = useAuth();
+    const isEditor = user?.role === 'admin' || user?.role === 'editor';
 
     // Distinguished members state
     const [distinguishedMembers, setDistinguishedMembers] = useState([]);
@@ -112,6 +120,22 @@ export default function ClubActivities() {
             setMessageText('');
             setTimeout(() => { setMessageModal(null); setMessageSent(false); }, 1500);
         } catch { alert('حدث خطأ'); }
+    };
+
+    const handleCreateNews = async (formData) => {
+        try {
+            await apiCall('/news', {
+                method: 'POST',
+                body: formData
+            });
+            setShowEditorModal(false);
+            // Refresh news
+            const updatedNews = await newsAPI.getAll();
+            setNews(Array.isArray(updatedNews) ? updatedNews : []);
+        } catch (error) {
+            console.error('Failed to create news:', error);
+            alert('فشل في نشر الخبر');
+        }
     };
 
     const filteredEvents = events.filter(event => {
@@ -579,10 +603,19 @@ export default function ClubActivities() {
                             animate={{ opacity: 1, y: 0 }}
                             className="max-w-4xl mx-auto space-y-6"
                         >
-                            <div className="bg-gradient-to-br from-blue-500/10 to-cyan-500/5 border border-blue-500/20 rounded-2xl p-8 text-center">
+                            <div className="bg-gradient-to-br from-blue-500/10 to-cyan-500/5 border border-blue-500/20 rounded-2xl p-8 text-center relative">
                                 <Newspaper size={48} className="text-blue-400 mx-auto mb-4" />
                                 <h2 className="text-2xl font-bold text-white">أخبار النادي</h2>
                                 <p className="text-gray-400">آخر الأخبار والتحديثات</p>
+
+                                {isEditor && (
+                                    <button
+                                        onClick={() => setShowEditorModal(true)}
+                                        className="absolute left-8 top-1/2 -translate-y-1/2 bg-[#7112AF] hover:bg-[#5a0d8e] text-white px-5 py-2.5 rounded-xl flex items-center gap-2 font-bold transition-all"
+                                    >
+                                        <Plus size={18} /> إضافة خبر
+                                    </button>
+                                )}
                             </div>
 
                             {news.length === 0 ? (
@@ -603,7 +636,7 @@ export default function ClubActivities() {
                                             {/* Image Banner */}
                                             {item.image_url && (
                                                 <div className="relative h-52 overflow-hidden">
-                                                    <img src={item.image_url.startsWith('http') ? item.image_url : `http://localhost:5000${item.image_url}`} alt={item.title} className="w-full h-full object-cover" />
+                                                    <img src={getApiImageUrl(item.image_url)} alt={item.title} className="w-full h-full object-cover" />
                                                     <div className="absolute inset-0 bg-gradient-to-t from-[#05050f] via-transparent to-transparent" />
                                                     <div className="absolute inset-0" style={{ mixBlendMode: 'color', background: 'linear-gradient(135deg, rgba(59,130,246,0.2), rgba(6,182,212,0.1))' }} />
                                                 </div>
@@ -855,6 +888,14 @@ export default function ClubActivities() {
                     </AnimatePresence>
                 </div>
             </div>
+
+            {/* Markdown Editor Modal for News */}
+            <MarkdownEditorModal
+                isOpen={showEditorModal}
+                onClose={() => setShowEditorModal(false)}
+                onSubmit={handleCreateNews}
+                type="news"
+            />
 
             {/* Registration Modal */}
             <AnimatePresence>
@@ -1175,6 +1216,6 @@ export default function ClubActivities() {
                     </motion.div>
                 )}
             </AnimatePresence>
-        </div>
+        </div >
     );
 }

@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: tucc-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: tucc_user
+      POSTGRES_PASSWORD: tucc_password
+      POSTGRES_DB: tucc_db
+    ports:
+      - '5432:5432'
+    volumes:
+      - tucc-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tucc_user -d tucc_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: tucc-redis
+    restart: always
+    ports:
+      - '6379:6379'
+    volumes:
+      - tucc-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  tucc-db-data:
+  tucc-redis-data:

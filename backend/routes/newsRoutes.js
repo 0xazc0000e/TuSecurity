@@ -29,6 +29,7 @@ const upload = multer({
 
 // Public Routes
 router.get('/', newsController.getAllNews);
+router.get('/latest-updates', newsController.getLatestUpdates);
 router.get('/:id', newsController.getNewsById);
 
 // Protected Routes

@@ -5,15 +5,17 @@ import {
     Shield, Target, Terminal, Clock, Calendar, Users, Star,
     ChevronRight, ChevronDown, Play, BookOpen, Award, Filter,
     Video, FileText, Hash, Lock, CheckCircle, User, Eye,
-    Heart, Bookmark, Share2
+    Heart, Bookmark, Share2, Plus
 } from 'lucide-react';
 import { lmsAPI } from '../services/api';
-import { apiCall } from '../context/AuthContext';
+// apiCall removed because we will use useAuth for apiCall and user
 import axios from 'axios';
 import LessonViewer from '../components/LessonViewer';
 import ArticleViewer from '../components/ArticleViewer';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import MarkdownEditorModal from '../components/ui/MarkdownEditorModal';
+import { useAuth } from '../context/AuthContext';
 
 const ICON_MAP = {
     'Shield': Shield, 'Target': Target, 'Terminal': Terminal,
@@ -21,7 +23,8 @@ const ICON_MAP = {
 };
 
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const MEDIA_URL = API_BASE_URL.replace(/\/api\/?$/, '');
 
 // ─── Progress helpers (localStorage) ──────────────────────
 // (Progress helpers removed)
@@ -52,42 +55,44 @@ function TrackCard({ track, onClick, onEnroll, enrolled, completedLessons = [] }
     };
 
     return (
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+        <motion.div initial={{ opacity: 0, scale: 0.95 }} whileInView={{ opacity: 1, scale: 1 }} viewport={{ once: true, margin: "-50px" }} transition={{ duration: 0.4 }}
             onClick={enrolled ? () => onClick(track) : undefined}
-            className={`bg-[#12122a] border ${enrolled ? 'border-purple-500/50' : 'border-[#1f1f3d]'} rounded-2xl p-6 cursor-pointer hover:border-purple-500/50 transition-all group relative overflow-hidden`}>
-            <div className="absolute inset-0 bg-gradient-to-br from-purple-600/5 to-pink-600/5 opacity-0 group-hover:opacity-100 transition-opacity" />
+            className={`bg-[#050214] border ${enrolled ? 'border-[#7112AF]' : 'border-white/10'} rounded-2xl p-6 cursor-pointer hover:border-[#ff006e] hover:shadow-[0_0_30px_rgba(255,0,110,0.2)] transition-all duration-300 group relative overflow-hidden backdrop-blur-md`}>
+            <div className="absolute top-0 right-0 w-32 h-32 bg-[#7112AF]/20 rounded-full blur-3xl group-hover:bg-[#ff006e]/20 transition-colors duration-500" />
             <div className="relative z-10">
                 <div className="flex items-start justify-between mb-4">
-                    <div className="p-3 bg-gradient-to-br from-purple-600/20 to-pink-600/10 rounded-xl border border-purple-500/20">
-                        <Icon size={28} className="text-purple-400" />
+                    <div className="p-4 bg-gradient-to-br from-[#7112AF]/20 to-[#ff006e]/10 rounded-xl border border-[#7112AF]/30 shadow-[0_0_15px_rgba(113,18,175,0.3)]">
+                        <Icon size={32} className="text-[#d4b3ff] group-hover:scale-110 transition-transform" />
                     </div>
                     {enrolled && progress > 0 && (
-                        <span className="text-xs font-bold text-green-400 bg-green-400/10 px-2 py-1 rounded-full">{progress}%</span>
+                        <span className="text-xs font-bold text-green-400 bg-green-400/10 px-3 py-1.5 rounded-full border border-green-500/20 shadow-[0_0_10px_rgba(34,197,94,0.2)]">{progress}% مكتمل</span>
                     )}
                 </div>
-                <h3 className="text-lg font-bold text-white mb-2 group-hover:text-purple-300 transition-colors">{track.title}</h3>
-                <p className="text-sm text-gray-400 mb-4 line-clamp-2">{track.description}</p>
+                <h3 className="text-xl font-bold text-white mb-2 group-hover:text-[#ff006e] transition-colors">{track.title}</h3>
+                <p className="text-sm text-gray-400 mb-6 line-clamp-2 leading-relaxed">{track.description}</p>
 
-                <div className="flex justify-between items-center mt-4">
-                    <div className="flex gap-3 text-xs">
-                        <span className="bg-purple-600/20 text-purple-400 px-2 py-1 rounded border border-purple-600/20">{totalLessons} درس</span>
-                        <span className="bg-yellow-600/20 text-yellow-400 px-2 py-1 rounded border border-yellow-600/20">{totalXP} XP</span>
+                <div className="flex justify-between items-center mt-4 pt-4 border-t border-white/5">
+                    <div className="flex gap-2 text-xs font-bold">
+                        <span className="bg-[#7112AF]/20 text-[#d4b3ff] px-2 py-1 rounded inline-flex items-center gap-1"><BookOpen size={12} /> {totalLessons} درس</span>
+                        <span className="bg-[#ff006e]/20 text-[#ffb3d9] px-2 py-1 rounded inline-flex items-center gap-1"><Star size={12} /> {totalXP} XP</span>
                     </div>
 
                     {!enrolled ? (
-                        <button onClick={handleEnroll} className="px-4 py-1.5 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-lg transition-colors z-20">
-                            تسجيل الآن
+                        <button onClick={handleEnroll} className="px-5 py-2 bg-gradient-to-r from-[#7112AF] to-[#ff006e] hover:shadow-[0_0_20px_rgba(113,18,175,0.5)] text-white text-xs font-bold rounded-lg transition-all hover:scale-105 z-20">
+                            تسجيل في المسار
                         </button>
                     ) : (
-                        <span className="text-xs font-bold text-green-400 flex items-center gap-1">
-                            <CheckCircle size={14} /> مسجل
+                        <span className="text-sm font-bold text-green-400 flex items-center gap-1 bg-green-500/10 px-3 py-1.5 rounded-lg border border-green-500/20">
+                            <CheckCircle size={16} /> مسجل بالفعل
                         </span>
                     )}
                 </div>
 
                 {enrolled && progress > 0 && (
-                    <div className="mt-3 w-full bg-white/10 rounded-full h-1.5">
-                        <div className="bg-gradient-to-r from-purple-500 to-pink-500 h-1.5 rounded-full transition-all" style={{ width: `${progress}%` }} />
+                    <div className="mt-4 w-full bg-white/5 rounded-full h-2 overflow-hidden border border-white/5">
+                        <div className="bg-gradient-to-r from-green-500 to-emerald-400 h-full rounded-full transition-all duration-1000 ease-out relative" style={{ width: `${progress}%` }}>
+                            <div className="absolute inset-0 bg-white/20 animate-pulse" />
+                        </div>
                     </div>
                 )}
             </div>
@@ -102,7 +107,7 @@ function CourseCard({ course }) {
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
             className="bg-[#12122a] border border-[#1f1f3d] rounded-xl overflow-hidden hover:border-blue-500/30 transition-all">
             <div className="h-40 bg-gradient-to-br from-blue-600/20 to-cyan-600/10 flex items-center justify-center relative">
-                {course.thumbnail_url ? <img src={course.thumbnail_url} alt="" className="w-full h-full object-cover" />
+                {course.thumbnail_url ? <img src={course.thumbnail_url.startsWith('http') ? course.thumbnail_url : `${MEDIA_URL}${course.thumbnail_url}`} alt="" className="w-full h-full object-cover" />
                     : <Video size={40} className="text-blue-400" />}
                 {course.duration && (
                     <span className="absolute bottom-2 left-2 bg-black/70 text-white text-xs px-2 py-1 rounded flex items-center gap-1">
@@ -218,7 +223,7 @@ function ArticleCard({ article, onClick }) {
             className="bg-[#12122a] border border-[#1f1f3d] rounded-xl overflow-hidden hover:border-orange-500/30 transition-all cursor-pointer group">
             {article.cover_image && (
                 <img
-                    src={article.cover_image.startsWith('http') ? article.cover_image : `${BASE_URL}${article.cover_image}`}
+                    src={article.cover_image.startsWith('http') || article.cover_image.startsWith('data:') ? article.cover_image : `${MEDIA_URL}${article.cover_image}`}
                     alt={article.title}
                     className="w-full h-36 object-cover"
                 />
@@ -338,6 +343,9 @@ export default function KnowledgeBase() {
     const [searchQuery, setSearchQuery] = useState('');
     const [completedLessons, setCompletedLessons] = useState([]);
     const [enrollments, setEnrollments] = useState([]);
+    const [showEditorModal, setShowEditorModal] = useState(false);
+    const { user, apiCall } = useAuth();
+    const isEditor = user?.role === 'admin' || user?.role === 'editor';
 
     useEffect(() => {
         setIsLoading(true);
@@ -370,28 +378,44 @@ export default function KnowledgeBase() {
                     }
                 }
             }
-        }).finally(() => setIsLoading(false));
+        }).catch(err => console.error("Error fetching data:", err)).finally(() => setIsLoading(false));
 
-        // Fetch enrollments
-        const token = localStorage.getItem('token');
-        if (token) {
-            axios.get(`${BASE_URL}/api/auth/profile`, {
-                headers: { Authorization: `Bearer ${token}` }
-            })
-                .then(res => {
-                    const trackIds = res.data.enrollments
-                        ?.filter(e => e.type === 'track')
-                        .map(e => Number(e.item_id)) || [];
-                    setEnrollments(trackIds);
-                })
-                .catch(err => console.error(err));
+        // Fetch enrollments and history reliably
+        const fetchUserData = async () => {
+            try {
+                const token = localStorage.getItem('token');
+                if (token) {
+                    const profileData = await apiCall('/auth/profile');
+                    if (profileData && profileData.enrollments) {
+                        const trackIds = profileData.enrollments
+                            .filter(e => e.type === 'track')
+                            .map(e => Number(e.item_id));
+                        setEnrollments(trackIds);
+                    }
 
-            // Fetch completed lessons
-            lmsAPI.getCompletedLessons()
-                .then(ids => setCompletedLessons(ids))
-                .catch(err => console.error('Failed to fetch progress:', err));
+                    const completedKeys = await lmsAPI.getCompletedLessons();
+                    setCompletedLessons(completedKeys);
+                }
+            } catch (err) {
+                console.warn('Failed to fetch user progress:', err);
+            }
+        };
+        fetchUserData();
+
+    }, [param, apiCall]); // Depend on param to re-run if URL changes
+
+    const handleCreateArticle = async (formData) => {
+        try {
+            await lmsAPI.createArticle(formData);
+            setShowEditorModal(false);
+            // Refresh articles
+            const updatedArgs = await lmsAPI.getArticles();
+            setArticles(Array.isArray(updatedArgs) ? updatedArgs : []);
+        } catch (error) {
+            console.error('Failed to create article:', error);
+            alert('فشل في نشر المقال');
         }
-    }, [param]); // Depend on param to re-run if URL changes
+    };
 
     // (Duplicate useEffect removed)
 
@@ -484,23 +508,26 @@ export default function KnowledgeBase() {
             </div>
 
             {/* Header */}
-            <div className="relative z-10 border-b border-white/10 bg-[#0a0a0f]/80 backdrop-blur-md">
-                <div className="max-w-7xl mx-auto px-6 py-6">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                            <div className="p-3 bg-gradient-to-br from-purple-600 to-pink-600 rounded-xl shadow-[0_0_30px_rgba(113,18,175,0.3)]">
-                                <BookOpen size={28} className="text-white" />
+            <div className="relative z-10 border-b border-white/5 bg-[#050214]/80 backdrop-blur-xl">
+                <div className="absolute inset-0 overflow-hidden pointer-events-none">
+                    <div className="absolute -top-24 right-0 w-96 h-96 bg-[#7112AF] rounded-full blur-[150px] opacity-10" />
+                </div>
+                <div className="max-w-7xl mx-auto px-6 py-8 relative z-10">
+                    <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+                        <div className="flex items-center gap-5">
+                            <div className="p-4 bg-gradient-to-br from-[#7112AF]/20 to-[#ff006e]/10 rounded-2xl border border-[#7112AF]/30 shadow-[0_0_30px_rgba(113,18,175,0.2)]">
+                                <BookOpen size={36} className="text-white drop-shadow-md" />
                             </div>
                             <div>
-                                <h1 className="text-3xl font-bold text-white">قاعدة المعرفة</h1>
-                                <p className="text-gray-400 text-sm">تعلم، تدرب، واحترف الأمن السيبراني</p>
+                                <h1 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-l from-white to-gray-400 mb-1">قاعدة المعرفة</h1>
+                                <p className="text-gray-400 font-medium tracking-wide">تعلم، تدرب، واحترف الأمن السيبراني معنا</p>
                             </div>
                         </div>
-                        <div className="relative w-72">
-                            <Filter className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500" size={16} />
+                        <div className="relative w-full md:w-80 group">
+                            <Filter className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-[#ff006e] transition-colors" size={18} />
                             <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)}
-                                placeholder="بحث..."
-                                className="w-full pr-10 pl-4 py-2.5 bg-white/5 border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-purple-500" />
+                                placeholder="ابحث في المسارات، الدورات، أو المقالات..."
+                                className="w-full pr-12 pl-4 py-3 bg-[#0a051e] border border-white/10 rounded-xl text-sm text-white placeholder-gray-500 focus:outline-none focus:border-[#ff006e] focus:ring-1 focus:ring-[#ff006e] shadow-inner transition-all" />
                         </div>
                     </div>
                 </div>
@@ -642,6 +669,18 @@ export default function KnowledgeBase() {
                             {/* ═══ ARTICLES TAB ═══ */}
                             {activeTab === 'articles' && (
                                 <motion.div key="articles" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
+
+                                    {isEditor && (
+                                        <div className="flex justify-end mb-6">
+                                            <button
+                                                onClick={() => setShowEditorModal(true)}
+                                                className="bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 rounded-xl flex items-center gap-2 font-bold transition-all"
+                                            >
+                                                <Plus size={18} /> إضافة مقال
+                                            </button>
+                                        </div>
+                                    )}
+
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                                         {articles.map(a => <ArticleCard key={a.id} article={a} onClick={() => setSelectedArticle(a)} />)}
                                     </div>
@@ -654,6 +693,13 @@ export default function KnowledgeBase() {
                     )}
                 </div>
             </div>
+
+            <MarkdownEditorModal
+                isOpen={showEditorModal}
+                onClose={() => setShowEditorModal(false)}
+                onSubmit={handleCreateArticle}
+                type="article"
+            />
         </div>
     );
 }

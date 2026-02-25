@@ -39,6 +39,9 @@ router.post('/lessons/:id/complete', requireAuth, lmsController.completeLesson);
 // Quiz Submission
 router.post('/quiz/submit', requireAuth, lmsController.submitQuiz);
 
+// Flag Submission (CTF)
+router.post('/flag/submit', requireAuth, lmsController.submitFlag);
+
 // ═══════════════════════════════════════════════════════════
 //  ARTICLES — CRUD
 // ═══════════════════════════════════════════════════════════
@@ -106,6 +109,7 @@ router.delete('/articles/:id', requireAuth, requireEditor, (req, res) => {
 //  SYLLABUS (Nested Tracks > Courses > Units > Lessons)
 // ═══════════════════════════════════════════════════════════
 router.get('/syllabus', lmsController.getSyllabus);
+router.get('/latest', lmsController.getLatestKnowledge);
 
 // ═══════════════════════════════════════════════════════════
 //  LESSONS

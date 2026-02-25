@@ -1,37 +1,30 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { Terminal, Lock, Globe, ArrowLeft, Cpu } from 'lucide-react';
+import { Terminal, Shield, ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+
+// Hardcoded simulators data (matches SimulatorsHub.jsx)
+const SIMULATORS_PREVIEW = [
+    {
+        id: 'bash-pro',
+        title: 'محاكي Bash الاحترافي',
+        category: 'أداة',
+        difficulty: 'مبتدئ',
+        description: 'تعلم أوامر Linux من الصفر حتى الاحتراف مع بيئة تفاعلية حقيقية',
+        icon: Terminal,
+    },
+    {
+        id: 'attack-operation',
+        title: 'عملية الفهد الأسود',
+        category: 'سيناريو هجوم',
+        difficulty: 'متوسط',
+        description: 'سيناريو اختراق كامل مع 5 مراحل: استطلاع، مسح، استغلال، ما بعد الاستغلال',
+        icon: Shield,
+    },
+];
 
 export const SimulatorsPreviewSection = () => {
     const navigate = useNavigate();
-
-    const simulators = [
-        {
-            id: 'password-cracker',
-            icon: <Lock size={24} />,
-            title: 'كاسر كلمات المرور',
-            category: 'التشفير',
-            description: 'تعلم كيف يتم تخمين كلمات المرور وكيف تحمي حساباتك بكلمات مرور قوية.',
-            difficulty: 'مبتدئ'
-        },
-        {
-            id: 'network-scanner',
-            icon: <Globe size={24} />,
-            title: 'ماسح الشبكات',
-            category: 'الشبكات',
-            description: 'اكتشف الأجهزة المتصلة بالشبكة وافهم المنافذ المفتوحة وكيفية تأمينها.',
-            difficulty: 'متوسط'
-        },
-        {
-            id: 'packet-sniffer',
-            icon: <Cpu size={24} />,
-            title: 'محلل الحزم',
-            category: 'تحليل البيانات',
-            description: 'راقب البيانات التي تنتقل عبر الشبكة وتعلم أهمية التشفير.',
-            difficulty: 'متقدم'
-        }
-    ];
 
     return (
         <section className="py-24 px-6 relative z-10 bg-[#050214]/50 backdrop-blur-sm border-y border-white/5">
@@ -58,37 +51,40 @@ export const SimulatorsPreviewSection = () => {
                     </div>
 
                     <div className="lg:w-1/2 grid gap-4 w-full">
-                        {simulators.map((sim, index) => (
-                            <motion.div
-                                key={sim.id}
-                                initial={{ opacity: 0, x: 30 }}
-                                whileInView={{ opacity: 1, x: 0 }}
-                                transition={{ duration: 0.5, delay: index * 0.15 }}
-                                className="group relative overflow-hidden bg-[#0a051e] border border-white/5 rounded-2xl p-6 hover:border-[#7112AF]/30 transition-colors cursor-pointer text-right"
-                                onClick={() => navigate(`/simulators/${sim.id}`)}
-                            >
-                                <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-[#7112AF] to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                        {SIMULATORS_PREVIEW.map((sim, index) => {
+                            const Icon = sim.icon;
+                            return (
+                                <motion.div
+                                    key={sim.id}
+                                    initial={{ opacity: 0, x: 30 }}
+                                    whileInView={{ opacity: 1, x: 0 }}
+                                    transition={{ duration: 0.5, delay: index * 0.15 }}
+                                    className="group relative overflow-hidden bg-[#0a051e] border border-white/5 rounded-2xl p-6 hover:border-[#7112AF]/30 transition-colors cursor-pointer text-right"
+                                    onClick={() => navigate('/simulators')}
+                                >
+                                    <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-[#7112AF] to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
 
-                                <div className="flex items-start gap-4 flex-row-reverse">
-                                    <div className="p-3 rounded-lg bg-[#7112AF]/10 text-[#d4b3ff]">
-                                        {sim.icon}
-                                    </div>
-                                    <div className="flex-1">
-                                        <div className="flex justify-between items-start mb-2 flex-row-reverse">
-                                            <h3 className="text-xl font-bold text-white group-hover:text-[#7112AF] transition-colors">{sim.title}</h3>
-                                            <span className="text-xs font-bold px-2 py-1 rounded bg-white/5 text-slate-400 border border-white/5">{sim.category}</span>
+                                    <div className="flex items-start gap-4 flex-row-reverse">
+                                        <div className="p-3 rounded-lg bg-[#7112AF]/10 text-[#d4b3ff]">
+                                            <Icon size={24} />
                                         </div>
-                                        <p className="text-slate-400 text-sm leading-relaxed mb-3">
-                                            {sim.description}
-                                        </p>
-                                        <div className="flex items-center gap-2 text-xs font-mono text-slate-500 flex-row-reverse">
-                                            <span>المستوى:</span>
-                                            <span className="text-[#b66dff]">{sim.difficulty}</span>
+                                        <div className="flex-1">
+                                            <div className="flex justify-between items-start mb-2 flex-row-reverse">
+                                                <h3 className="text-xl font-bold text-white group-hover:text-[#7112AF] transition-colors">{sim.title}</h3>
+                                                <span className="text-xs font-bold px-2 py-1 rounded bg-white/5 text-slate-400 border border-white/5">{sim.category}</span>
+                                            </div>
+                                            <p className="text-slate-400 text-sm leading-relaxed mb-3 line-clamp-2">
+                                                {sim.description}
+                                            </p>
+                                            <div className="flex items-center gap-2 text-xs font-mono text-slate-500 flex-row-reverse">
+                                                <span>المستوى:</span>
+                                                <span className="text-[#b66dff]">{sim.difficulty}</span>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            </motion.div>
-                        ))}
+                                </motion.div>
+                            );
+                        })}
                     </div>
                 </div>
             </div>

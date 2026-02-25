@@ -4,7 +4,8 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { apiCall } from '../context/AuthContext';
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const MEDIA_URL = API_BASE_URL.replace(/\/api\/?$/, '');
 
 export default function ArticleViewer({ article, onBack }) {
     const [artLiked, setArtLiked] = useState(false);
@@ -103,7 +104,7 @@ export default function ArticleViewer({ article, onBack }) {
                 <div className="w-full h-64 md:h-80 relative">
                     <div className="absolute inset-0 bg-gradient-to-t from-[#05050f] via-[#05050f]/50 to-transparent z-10" />
                     <img
-                        src={article.cover_image.startsWith('http') ? article.cover_image : `${BASE_URL}${article.cover_image}`}
+                        src={article.cover_image.startsWith('http') || article.cover_image.startsWith('data:') ? article.cover_image : `${MEDIA_URL}${article.cover_image}`}
                         alt={article.title}
                         className="w-full h-full object-cover"
                     />
@@ -129,7 +130,19 @@ export default function ArticleViewer({ article, onBack }) {
                 </div>
                 {/* Markdown body - Obsidian Theme */}
                 <div className="obs-prose max-w-none">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                    <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        components={{
+                            img: ({ node, ...props }) => {
+                                const imgSrc = props.src?.startsWith('http') || props.src?.startsWith('data:') ? props.src : `${MEDIA_URL}${props.src}`;
+                                return (
+                                    <div className="flex justify-center my-8">
+                                        <img {...props} src={imgSrc} className="max-w-full h-auto rounded-xl shadow-[0_0_30px_rgba(255,100,0,0.2)] border border-[#1f1f3d]" alt={props.alt || "Article image"} />
+                                    </div>
+                                );
+                            }
+                        }}
+                    >
                         {article.content || ''}
                     </ReactMarkdown>
                 </div>

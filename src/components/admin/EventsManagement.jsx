@@ -418,7 +418,9 @@ export default function EventsManagement() {
                                                             const fd = new FormData();
                                                             fd.append('image', blob, 'event-cover.jpg');
                                                             try {
-                                                                const resp = await fetch('http://localhost:5000/api/upload', { method: 'POST', body: fd });
+                                                                const uploadUrl = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api') + '/upload';
+                                                                const token = localStorage.getItem('token');
+                                                                const resp = await fetch(uploadUrl, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: fd });
                                                                 const data = await resp.json();
                                                                 if (data.url) setEditItem(p => ({ ...p, image: data.url }));
                                                             } catch { alert('فشل رفع الصورة'); }

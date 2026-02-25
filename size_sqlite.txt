@@ -1,0 +1,1 @@
+-rw-r--r--. 1 azo azo 0 Feb 18 23:09 /home/azo/Documents/tu_clup_cyper_the_end111/backend/database.sqlite

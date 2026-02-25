@@ -5,7 +5,7 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { MatrixBackground } from '../components/ui/MatrixBackground';
 import { GoogleIcon, MicrosoftIcon } from '../components/ui/SocialIcons.jsx';
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 export default function Login() {
     const navigate = useNavigate();
@@ -45,8 +45,8 @@ export default function Login() {
             if (res.ok) {
                 localStorage.setItem('token', data.token);
                 // Force reload to update AuthContext
-                const target = data.redirectTo === '/dashboard' ? '/' : data.redirectTo;
-                window.location.href = target || '/';
+                const target = data.redirectTo === '/dashboard' ? '/profile' : data.redirectTo;
+                window.location.href = target || '/profile';
             } else {
                 setError(data.error || 'فشل تسجيل الدخول');
             }

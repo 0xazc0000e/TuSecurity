@@ -483,6 +483,86 @@ const submitQuiz = async (req, res) => {
     }
 };
 
+const submitFlag = async (req, res) => {
+    const { lesson_id, flag } = req.body;
+
+    if (!lesson_id || !flag) {
+        return res.status(400).json({ error: 'Lesson ID and Flag are required' });
+    }
+
+    const userId = req.user.id;
+
+    try {
+        // Fetch the lesson's expected flag and XP
+        const lesson = await new Promise((resolve, reject) => {
+            db.get('SELECT flag, xp_reward FROM lessons WHERE id = ?', [lesson_id], (err, row) => {
+                if (err) reject(err);
+                else resolve(row);
+            });
+        });
+
+        if (!lesson) {
+            return res.status(404).json({ error: 'Lesson not found' });
+        }
+
+        if (!lesson.flag) {
+            return res.status(400).json({ error: 'This lesson does not require a flag' });
+        }
+
+        // Validate the flag (case sensitive)
+        if (flag.trim() === lesson.flag) {
+            const xpReward = lesson.xp_reward || 10;
+
+            // Check if already completed
+            const alreadyCompleted = await new Promise((resolve, reject) => {
+                db.get('SELECT id FROM lesson_progress WHERE user_id = ? AND lesson_id = ? AND is_completed = 1',
+                    [userId, lesson_id], (err, row) => {
+                        if (err) reject(err);
+                        else resolve(row);
+                    });
+            });
+
+            if (alreadyCompleted) {
+                return res.json({ success: true, message: 'Flag correct, but lesson already completed.', xpAwarded: 0 });
+            }
+
+            // Mark completed and award XP
+            await new Promise((resolve, reject) => {
+                db.run(`
+                    INSERT INTO lesson_progress (user_id, lesson_id, is_completed, progress, completed_at, xp_earned, updated_at)
+                    VALUES (?, ?, 1, 100, datetime('now'), ?, datetime('now'))
+                    ON CONFLICT(user_id, lesson_id) DO UPDATE SET
+                    is_completed = 1,
+                    progress = 100,
+                    completed_at = datetime('now'),
+                    xp_earned = max(xp_earned, ?),
+                    updated_at = datetime('now')
+                `, [userId, lesson_id, xpReward, xpReward], function (err) {
+                    if (err) reject(err);
+                    else resolve();
+                });
+            });
+
+            // Update user's Total XP
+            await new Promise((resolve, reject) => {
+                db.run('UPDATE users SET total_xp = total_xp + ? WHERE id = ?', [xpReward, userId], (err) => {
+                    if (err) reject(err);
+                    else resolve();
+                });
+            });
+
+            checkAndAwardBadges(userId);
+
+            return res.json({ success: true, message: 'Correct Flag! Challenge completed.', xpAwarded: xpReward });
+        } else {
+            return res.status(400).json({ success: false, error: 'Incorrect Flag.' });
+        }
+    } catch (error) {
+        console.error('Flag submission error:', error);
+        res.status(500).json({ error: 'Server error processing flag validation' });
+    }
+};
+
 const getSyllabus = async (req, res) => {
     const query = `
         SELECT 
@@ -561,6 +641,29 @@ const getSyllabus = async (req, res) => {
     }
 };
 
+const getLatestKnowledge = async (req, res) => {
+    const safeGet = (sql, params = []) => new Promise((resolve) => {
+        db.get(sql, params, (err, row) => {
+            if (err) { console.error('[getLatestKnowledge] SQL error:', err.message); resolve(null); }
+            else resolve(row || null);
+        });
+    });
+
+    try {
+        const [latestTrack, latestCourse, latestArticle] = await Promise.all([
+            safeGet('SELECT id, title, description, icon as image, "track" as type, created_at FROM tracks ORDER BY created_at DESC LIMIT 1'),
+            safeGet('SELECT id, title, description, thumbnail_url as image, "course" as type, created_at FROM recorded_courses ORDER BY created_at DESC LIMIT 1'),
+            safeGet('SELECT id, title, description, cover_image as image, "article" as type, created_at FROM articles ORDER BY created_at DESC LIMIT 1'),
+        ]);
+
+        const latestItems = [latestTrack, latestCourse, latestArticle].filter(Boolean);
+        res.json({ success: true, latest: latestItems });
+    } catch (error) {
+        console.error('Error fetching latest knowledge:', error);
+        res.status(500).json({ success: false, error: 'Failed to fetch latest knowledge items' });
+    }
+};
+
 module.exports = {
     getTracks, createTrack, deleteTrack,
     getCourses, createCourse, deleteCourse,
@@ -568,5 +671,6 @@ module.exports = {
     getLessons, createLesson, updateLesson, deleteLesson,
     enrollUser,
     completeLesson, getCompletedLessons,
-    submitQuiz, getSyllabus
+    submitQuiz, submitFlag, getSyllabus,
+    getLatestKnowledge
 };

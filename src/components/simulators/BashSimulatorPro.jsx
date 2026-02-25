@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
+import {
     Terminal, BookOpen, PlayCircle, CheckCircle, Lock, Unlock,
     Eye, EyeOff, ArrowRight, RotateCcw, HelpCircle, Award,
     ChevronRight, ChevronLeft, Folder, FileText, Search,
@@ -8,838 +8,211 @@ import {
     AlertCircle, CheckCircle2, Clock, BarChart3, Star,
     TrendingUp, Users, MessageSquare, Lightbulb, Monitor,
     Cpu, Activity, Wifi, Database, Shield, Layers, HardDrive,
-    FileSearch, ScrollText, Cog, Play, Settings, Wrench
+    FileSearch, ScrollText, Cog, Play, Settings, Wrench, Globe,
+    ChevronDown, ChevronUp, Info
 } from 'lucide-react';
 import { MatrixBackground } from '../ui/MatrixBackground';
-
-const CURRICULUM = {
-    // Unit 1: Basics
-    basics: {
-        id: 'basics',
-        title: 'الوحدة الأولى: الأساسيات',
-        subtitle: 'كسر حاجز الخوف من الشاشة السوداء',
-        color: '#240993',
-        icon: Terminal,
-        description: 'تعلم الأوامر الأساسية للتنقل في النظام',
-        lessons: [
-            {
-                id: 1,
-                title: 'أين أنا؟ (نظام الرادار)',
-                command: 'pwd',
-                concept: 'في العالم الرقمي، لا يمكنك التحرك إذا لم تعرف موقعك',
-                visual: 'radar',
-                task: 'المخترق يجب أن يحدد موقعه الحالي داخل السيرفر',
-                expectedOutput: '/home/student',
-                hint: 'اكتب pwd لمعرفة مسارك الحالي',
-                xp: 10,
-                completed: false
-            },
-            {
-                id: 2,
-                title: 'كشف المستور (الرؤية الليلية)',
-                command: 'ls',
-                concept: 'غرفة مظلمة، عند تشغيل الكشاف تظهر الصناديق والأوراق',
-                visual: 'flashlight',
-                task: 'استعرض محتويات المجلد الحالي لرؤية الأدوات المتاحة',
-                expectedOutput: 'file1.txt folder1/ data/',
-                hint: 'استخدم ls لعرض الملفات والمجلدات',
-                xp: 10,
-                completed: false
-            },
-            {
-                id: 3,
-                title: 'الأسرار المخفية (الأشعة السينية)',
-                command: 'ls -a',
-                concept: 'بعض الملفات ترتدي عباءة إخفاء، نحتاج نظارة خاصة لكشفها',
-                visual: 'xray',
-                task: 'المجلد يبدو فارغاً لكن توجد ملفات مخفية. اعثر عليها',
-                expectedOutput: '.secret_config .hidden_folder/',
-                hint: 'ls -a يعرض الملفات المخفية التي تبدأ بنقطة',
-                xp: 15,
-                completed: false
-            },
-            {
-                id: 4,
-                title: 'الانتقال الآني (بوابة العبور)',
-                command: 'cd',
-                concept: 'الدخول من باب إلى غرفة أخرى',
-                visual: 'portal',
-                task: 'ادخل إلى مجلد Tools',
-                expectedOutput: 'cd Tools',
-                hint: 'استخدم cd followed by اسم المجلد',
-                xp: 10,
-                completed: false
-            },
-            {
-                id: 5,
-                title: 'التراجع التكتيكي',
-                command: 'cd ..',
-                concept: 'الخروج من الغرفة إلى الممر الرئيسي',
-                visual: 'back',
-                task: 'عد للمجلد السابق',
-                expectedOutput: 'cd ..',
-                hint: 'cd .. يرجع مستوى واحد للأعلى',
-                xp: 10,
-                completed: false
-            },
-            {
-                id: 6,
-                title: 'تنظيف الفوضى',
-                command: 'clear',
-                concept: 'لوح زجاجي مليء بالكتابة، تمسحه ليعود نظيفاً',
-                visual: 'clean',
-                task: 'نظف الشاشة من الأوامر القديمة',
-                expectedOutput: 'clear',
-                hint: 'clear يمسح الشاشة',
-                xp: 5,
-                completed: false
-            }
-        ]
-    },
-    
-    // Unit 2: File and Directory Management
-    file_management: {
-        id: 'file_management',
-        title: 'الوحدة الثانية: إدارة الملفات والمجلدات',
-        subtitle: 'التحكم الكامل في نظام الملفات',
-        color: '#7112AF',
-        icon: Folder,
-        description: 'إنشاء، نسخ، نقل، وحذف الملفات والمجلدات',
-        lessons: [
-            {
-                id: 7,
-                title: 'إنشاء القواعد',
-                command: 'mkdir',
-                concept: 'مهندس يضع مخططاً وعلى الفور يظهر المبنى',
-                visual: 'build',
-                task: 'أنشئ مجلداً جديداً باسم Hacking_Lab',
-                expectedOutput: 'mkdir Hacking_Lab',
-                hint: 'mkdir ينشئ مجلد جديد',
-                xp: 15,
-                completed: false
-            },
-            {
-                id: 8,
-                title: 'خلق البيانات',
-                command: 'touch',
-                concept: 'سحب ورقة بيضاء فارغة من الهواء',
-                visual: 'create',
-                task: 'أنشئ ملف notes.txt فارغاً',
-                expectedOutput: 'touch notes.txt',
-                hint: 'touch ينشئ ملف فارغ',
-                xp: 10,
-                completed: false
-            },
-            {
-                id: 9,
-                title: 'الاستنساخ',
-                command: 'cp',
-                concept: 'آلة تصوير مستندات تخرج نسخة طبق الأصل',
-                visual: 'copy',
-                task: 'انسخ notes.txt إلى notes_backup.txt',
-                expectedOutput: 'cp notes.txt notes_backup.txt',
-                hint: 'cp مصدر وجهة',
-                xp: 15,
-                completed: false
-            },
-            {
-                id: 10,
-                title: 'النقل والتمويه',
-                command: 'mv',
-                concept: 'نقل صندوق أو تغيير اللاصق التعريفي',
-                visual: 'move',
-                task: 'غير اسم virus.exe إلى game.exe',
-                expectedOutput: 'mv virus.exe game.exe',
-                hint: 'mv oldname newname',
-                xp: 15,
-                completed: false
-            },
-            {
-                id: 11,
-                title: 'التدمير',
-                command: 'rm',
-                concept: 'فرامة ورق تحول المستند لشرائح غير قابلة للاستعادة',
-                visual: 'destroy',
-                task: 'احذف evidence.log',
-                expectedOutput: 'rm evidence.log',
-                hint: 'rm يحذف الملفات - احذر!',
-                xp: 20,
-                completed: false
-            },
-            {
-                id: 12,
-                title: 'استدعاء الحكيم',
-                command: 'man',
-                concept: 'فتح موسوعة ضخمة لمعرفة تفاصيل دقيقة',
-                visual: 'book',
-                task: 'اطلب دليل استخدام أمر ls',
-                expectedOutput: 'man ls',
-                hint: 'man يعرض الدليل',
-                xp: 10,
-                completed: false
-            }
-        ]
-    },
-    
-    // Unit 3: Reading and Writing
-    read_write: {
-        id: 'read_write',
-        title: 'الوحدة الثالثة: القراءة والكتابة',
-        subtitle: 'التعامل مع محتوى الملفات',
-        color: '#ff006e',
-        icon: FileText,
-        description: 'قراءة الملفات والكتابة إليها وتوجيه الخرج',
-        lessons: [
-            {
-                id: 13,
-                title: 'القراءة السريعة',
-                command: 'cat',
-                concept: 'عرض محتوى وثيقة على شاشة البروجيكتور',
-                visual: 'projector',
-                task: 'اعرض محتوى password_hint.txt',
-                expectedOutput: 'cat password_hint.txt',
-                hint: 'cat يعرض محتوى الملف كاملاً',
-                xp: 15,
-                completed: false
-            },
-            {
-                id: 14,
-                title: 'الصوت والصدى',
-                command: 'echo',
-                concept: 'التحدث عبر مكبر صوت',
-                visual: 'speaker',
-                task: 'اطبع "Hacked by TuSecurity"',
-                expectedOutput: 'echo "Hacked by TuSecurity"',
-                hint: 'echo يطبع نص',
-                xp: 10,
-                completed: false
-            },
-            {
-                id: 15,
-                title: 'التوجيه',
-                command: '>',
-                concept: 'توجيه الماء للدلو بدلاً من الأرض',
-                visual: 'redirect',
-                task: 'احفظ كلمة السر في pass.txt',
-                expectedOutput: 'echo "password123" > pass.txt',
-                hint: '> يوجه الخرج لملف',
-                xp: 20,
-                completed: false
-            },
-            {
-                id: 16,
-                title: 'الإضافة',
-                command: '>>',
-                concept: 'الكتابة في الصفحة التالية من الدفتر',
-                visual: 'append',
-                task: 'أضف توقيعك للسجل دون مسحه',
-                expectedOutput: 'echo "signed" >> log.txt',
-                hint: '>> يضيف للملف',
-                xp: 15,
-                completed: false
-            }
-        ]
-    },
-    
-    // Unit 4: Viewing
-    viewing: {
-        id: 'viewing',
-        title: 'الوحدة الرابعة: الاستعراض',
-        subtitle: 'عرض الملفات بطرق مختلفة',
-        color: '#3b82f6',
-        icon: Eye,
-        description: 'عرض أجزاء من الملفات وتصفحها',
-        lessons: [
-            {
-                id: 17,
-                title: 'البدايات',
-                command: 'head',
-                concept: 'قراءة العناوين الرئيسية في الجريدة',
-                visual: 'headlines',
-                task: 'تحقق من أول 5 أسطر في الملف',
-                expectedOutput: 'head -n 5 file.txt',
-                hint: 'head -n عدد الملف',
-                xp: 15,
-                completed: false
-            },
-            {
-                id: 18,
-                title: 'النهايات',
-                command: 'tail',
-                concept: 'قراءة آخر صفحة في الرواية',
-                visual: 'ending',
-                task: 'راقب آخر الأحداث في access.log',
-                expectedOutput: 'tail -f access.log',
-                hint: 'tail -f للمتابعة المستمرة',
-                xp: 20,
-                completed: false
-            },
-            {
-                id: 19,
-                title: 'القراءة المتأنية',
-                command: 'less',
-                concept: 'كتاب ضخم تحتاج لتقليب الصفحات',
-                visual: 'book-scroll',
-                task: 'تصفح ملف system.log الطويل',
-                expectedOutput: 'less system.log',
-                hint: 'less يسمح بالتنقل في الملف الكبير',
-                xp: 15,
-                completed: false
-            },
-            {
-                id: 20,
-                title: 'المحقق الرقمي',
-                command: 'grep',
-                concept: 'عدسة مكبرة تبحث عن كلمة وتلونها بالأصفر',
-                visual: 'magnifier',
-                task: 'ابحث عن كلمة "Error" في السجلات',
-                expectedOutput: 'grep "Error" system.log',
-                hint: 'grep "نص" ملف',
-                xp: 25,
-                completed: false
-            }
-        ]
-    },
-    
-    // Unit 5: Device Management
-    device_management: {
-        id: 'device_management',
-        title: 'الوحدة الخامسة: إدارة الأجهزة',
-        subtitle: 'التحكم في الأجهزة والأقراص',
-        color: '#10b981',
-        icon: HardDrive,
-        description: 'إدارة الأقراص والأجهزة المتصلة',
-        lessons: [
-            {
-                id: 21,
-                title: 'مساحة القرص',
-                command: 'df',
-                concept: 'فحص المستودع كم تبقى من المساحة',
-                visual: 'warehouse',
-                task: 'تحقق من المساحة المتبقية في القرص',
-                expectedOutput: 'df -h',
-                hint: 'df -h يعرض المساحة بشكل مقروء',
-                xp: 15,
-                completed: false
-            },
-            {
-                id: 22,
-                title: 'حجم المجلدات',
-                command: 'du',
-                concept: 'ميزان إلكتروني يوزن المجلدات',
-                visual: 'scale',
-                task: 'احسب حجم مجلد /var/log',
-                expectedOutput: 'du -sh /var/log',
-                hint: 'du -sh يعرض الحجم بشكل مختصر',
-                xp: 20,
-                completed: false
-            },
-            {
-                id: 23,
-                title: 'الأجهزة المتصلة',
-                command: 'mount',
-                concept: 'قائمة بكل الأجهزة الموصولة',
-                visual: 'list',
-                task: 'اعرض الأقراص المُعلقة',
-                expectedOutput: 'mount',
-                hint: 'mount يعرز الأجهزة المُركبة',
-                xp: 15,
-                completed: false
-            },
-            {
-                id: 24,
-                title: 'معلومات النظام',
-                command: 'uname',
-                concept: 'بطاقة تعريف للنظام',
-                visual: 'id-card',
-                task: 'اعرف إصدار النظام واسمه',
-                expectedOutput: 'uname -a',
-                hint: 'uname -a يعرض كل المعلومات',
-                xp: 10,
-                completed: false
-            }
-        ]
-    },
-    
-    // Unit 6: Process Management
-    process_management: {
-        id: 'process_management',
-        title: 'الوحدة السادسة: إدارة العمليات',
-        subtitle: 'مراقبة والتحكم في البرامج',
-        color: '#f59e0b',
-        icon: Cpu,
-        description: 'إدارة البرامج والعمليات الجارية',
-        lessons: [
-            {
-                id: 25,
-                title: 'العمليات الجارية',
-                command: 'ps',
-                concept: 'قائمة بالجنود النشطين على الساحة',
-                visual: 'soldiers',
-                task: 'اعرض العمليات الجارية',
-                expectedOutput: 'ps aux',
-                hint: 'ps aux يعرض كل العمليات',
-                xp: 15,
-                completed: false
-            },
-            {
-                id: 26,
-                title: 'المراقبة الحية',
-                command: 'top',
-                concept: 'لوحة تحكم مباشرة للموارد',
-                visual: 'dashboard',
-                task: 'راقب استهلاك CPU والذاكرة',
-                expectedOutput: 'top',
-                hint: 'top يعرض العمليات مرتبة حسب الاستهلاك',
-                xp: 20,
-                completed: false
-            },
-            {
-                id: 27,
-                title: 'إنهاء العملية',
-                command: 'kill',
-                concept: 'إطلاق الرصاصة القاتلة',
-                visual: 'target',
-                task: 'أوقف العملية ذات PID 1234',
-                expectedOutput: 'kill 1234',
-                hint: 'kill PID يوقف العملية',
-                xp: 25,
-                completed: false
-            },
-            {
-                id: 28,
-                title: 'البحث في العمليات',
-                command: 'pgrep',
-                concept: 'نظارة للبحث عن عملية بالاسم',
-                visual: 'search',
-                task: 'ابحث عن PID لعملية sshd',
-                expectedOutput: 'pgrep sshd',
-                hint: 'pgrep يبحث عن العمليات بالاسم',
-                xp: 15,
-                completed: false
-            }
-        ]
-    },
-    
-    // Unit 7: Permissions and Scripts
-    permissions_scripts: {
-        id: 'permissions_scripts',
-        title: 'الوحدة السابعة: الصلاحيات والسكربتات',
-        subtitle: 'التحكم في الوصول وأتمتة المهام',
-        color: '#ef4444',
-        icon: Settings,
-        description: 'إدارة الصلاحيات وكتابة السكربتات',
-        lessons: [
-            {
-                id: 29,
-                title: 'مفاتيح التحكم',
-                command: 'chmod',
-                concept: 'لوحة تحكم بأزرار (R,W,X)',
-                visual: 'control-panel',
-                task: 'امنح صلاحية التنفيذ لـ tool.sh',
-                expectedOutput: 'chmod +x tool.sh',
-                hint: 'chmod +x يضيف صلاحية تنفيذ',
-                xp: 25,
-                completed: false
-            },
-            {
-                id: 30,
-                title: 'الملكية المطلقة',
-                command: 'chown',
-                concept: 'نقل ملكية عقار من شخص لآخر',
-                visual: 'ownership',
-                task: 'اجعل root_file ملكاً لك',
-                expectedOutput: 'chown student root_file',
-                hint: 'chown user ملف',
-                xp: 30,
-                completed: false
-            },
-            {
-                id: 31,
-                title: 'صلاحيات المستخدمين',
-                command: 'chmod',
-                concept: 'توزيع مفاتيح مختلفة لكل مجموعة',
-                visual: 'keys',
-                task: 'امنح القراءة للجميع والكتابة لك فقط',
-                expectedOutput: 'chmod 644 file.txt',
-                hint: 'chmod 644 يعني rw-r--r--',
-                xp: 30,
-                completed: false
-            },
-            {
-                id: 32,
-                title: 'كتابة السكربت الأول',
-                command: '#!',
-                concept: 'وصفة طبخ تحول لطبق جاهز',
-                visual: 'recipe',
-                task: 'أنشئ سكربت hello.sh يطبع مرحباً',
-                expectedOutput: '#!/bin/bash\necho "Hello World"',
-                hint: 'ابدأ بـ #!/bin/bash',
-                xp: 35,
-                completed: false
-            }
-        ]
-    }
-};
+import { apiCall } from '../../context/AuthContext';
+import { BASH_THEORY_SLIDES, CURRICULUM, evaluateCommand } from './BashSimulatorData';
 
 export default function BashSimulatorPro({ onBack }) {
-    const [currentUnit, setCurrentUnit] = useState('basics');
+    const [showIntro, setShowIntro] = useState(true);
+    const [introSlide, setIntroSlide] = useState(0);
+
+    const [currentUnit, setCurrentUnit] = useState('level1');
     const [currentLesson, setCurrentLesson] = useState(0);
-    const [showTheory, setShowTheory] = useState(true);
+    const [currentSubTask, setCurrentSubTask] = useState(0);
+
+    const [showTheory, setShowTheory] = useState(false);
+    const [showQuestion, setShowQuestion] = useState(false);
+    const [questionStatus, setQuestionStatus] = useState('waiting');
+    const [selectedAnswer, setSelectedAnswer] = useState('');
+
     const [terminalInput, setTerminalInput] = useState('');
     const [terminalHistory, setTerminalHistory] = useState([]);
     const [fileSystem, setFileSystem] = useState({
         currentPath: '/home/student',
-        files: ['notes.txt', 'data/', 'tools/'],
+        files: ['passwords.txt', 'script.sh', 'data/', 'folder1/', 'tools/'],
         hiddenFiles: ['.secret_config'],
         selectedFile: null
     });
-    const [completedLessons, setCompletedLessons] = useState([]);
+
+    const [completedSubTasks, setCompletedSubTasks] = useState([]);
     const [totalXP, setTotalXP] = useState(0);
-    const [showHelp, setShowHelp] = useState(false);
     const [showUnits, setShowUnits] = useState(false);
+    const [expandedLessons, setExpandedLessons] = useState([0]);
+
     const terminalRef = useRef(null);
 
     const unit = CURRICULUM[currentUnit];
-    const lesson = unit.lessons[currentLesson];
-    const totalLessons = Object.values(CURRICULUM).reduce((acc, u) => acc + u.lessons.length, 0);
+    const lesson = unit?.lessons[currentLesson];
+    const activeSubTask = lesson?.subTasks[currentSubTask];
 
-    const handleCommand = (command) => {
-        const trimmedCommand = command.trim();
-        const parts = trimmedCommand.split(' ');
-        const baseCommand = parts[0];
-        const args = parts.slice(1);
+    let totalSubTasksCount = 0;
+    Object.values(CURRICULUM).forEach(u => u.lessons.forEach(l => totalSubTasksCount += l.subTasks.length));
 
-        let output = '';
-        let success = false;
+    useEffect(() => {
+        if (!showIntro && !showUnits && !showTheory && currentLesson === 0 && currentSubTask === 0) {
+            setShowTheory(true);
+        }
+    }, [showIntro, showUnits]);
 
-        switch (baseCommand) {
-            case 'pwd':
-                output = fileSystem.currentPath;
-                if (lesson.command === 'pwd') success = true;
-                break;
+    const handleCommandInput = (command) => {
+        if (showQuestion) return;
 
-            case 'ls':
-                if (args.includes('-a')) {
-                    output = [...fileSystem.files, ...fileSystem.hiddenFiles].join('  ');
-                    if (lesson.command === 'ls' && args.includes('-a')) success = true;
-                } else {
-                    output = fileSystem.files.join('  ');
-                    if (lesson.command === 'ls' && !args.includes('-a')) success = true;
-                }
-                break;
+        // 1. Process via Data Module
+        const { output, success, newFileSystem } = evaluateCommand(command, fileSystem, activeSubTask);
 
-            case 'cd':
-                if (args[0] === '..') {
-                    const parentPath = fileSystem.currentPath.split('/').slice(0, -1).join('/') || '/';
-                    setFileSystem(prev => ({ ...prev, currentPath: parentPath }));
-                    output = `Moved to ${parentPath}`;
-                    if (lesson.command === 'cd' && args[0] === '..') success = true;
-                } else if (args[0]) {
-                    setFileSystem(prev => ({ 
-                        ...prev, 
-                        currentPath: `${prev.currentPath}/${args[0]}`.replace(/\/+/g, '/')
-                    }));
-                    output = `Moved to ${args[0]}`;
-                    if (lesson.command === 'cd' && args[0] !== '..') success = true;
-                }
-                break;
+        let displayOutput = output;
 
-            case 'clear':
-                setTerminalHistory([]);
-                output = 'Screen cleared';
-                if (lesson.command === 'clear') success = true;
-                break;
-
-            case 'mkdir':
-                if (args[0]) {
-                    setFileSystem(prev => ({
-                        ...prev,
-                        files: [...prev.files, `${args[0]}/`]
-                    }));
-                    output = `Created directory: ${args[0]}`;
-                    if (lesson.command === 'mkdir') success = true;
-                }
-                break;
-
-            case 'touch':
-                if (args[0]) {
-                    setFileSystem(prev => ({
-                        ...prev,
-                        files: [...prev.files, args[0]]
-                    }));
-                    output = `Created file: ${args[0]}`;
-                    if (lesson.command === 'touch') success = true;
-                }
-                break;
-
-            case 'cp':
-                if (args.length >= 2) {
-                    output = `Copied ${args[0]} to ${args[1]}`;
-                    if (lesson.command === 'cp') success = true;
-                }
-                break;
-
-            case 'mv':
-                if (args.length >= 2) {
-                    output = `Moved/Renamed ${args[0]} to ${args[1]}`;
-                    if (lesson.command === 'mv') success = true;
-                }
-                break;
-
-            case 'rm':
-                if (args[0]) {
-                    setFileSystem(prev => ({
-                        ...prev,
-                        files: prev.files.filter(f => f !== args[0])
-                    }));
-                    output = `Removed: ${args[0]}`;
-                    if (lesson.command === 'rm') success = true;
-                }
-                break;
-
-            case 'cat':
-                if (args[0]) {
-                    output = `Contents of ${args[0]}:\nThis is a sample file content for demonstration purposes.`;
-                    if (lesson.command === 'cat') success = true;
-                }
-                break;
-
-            case 'echo':
-                const echoText = args.join(' ').replace(/["']/g, '');
-                output = echoText;
-                if (lesson.command === 'echo') success = true;
-                break;
-
-            case 'man':
-                if (args[0]) {
-                    output = `MANUAL PAGE FOR ${args[0].toUpperCase()}\n\nNAME\n    ${args[0]} - command description\n\nSYNOPSIS\n    ${args[0]} [options] [arguments]\n\nDESCRIPTION\n    Detailed description of the command...`;
-                    if (lesson.command === 'man') success = true;
-                }
-                break;
-
-            case 'grep':
-                if (args.length >= 2) {
-                    const searchTerm = args[0].replace(/["']/g, '');
-                    output = `Searching for "${searchTerm}"...\nLine 5: ...${searchTerm}...\nLine 12: ...${searchTerm}...\nLine 23: ...${searchTerm}...`;
-                    if (lesson.command === 'grep') success = true;
-                }
-                break;
-
-            case 'chmod':
-                if (args.includes('+x') && args[1]) {
-                    output = `Added execute permission to ${args[1]}`;
-                    if (lesson.command === 'chmod') success = true;
-                }
-                break;
-
-            case 'head':
-                if (args[0]) {
-                    const lines = args.includes('-n') ? parseInt(args[args.indexOf('-n') + 1]) || 5 : 10;
-                    output = `First ${lines} lines of ${args[0]}:\nLine 1: ...\nLine 2: ...\n...\nLine ${lines}: ...`;
-                    if (lesson.command === 'head') success = true;
-                }
-                break;
-
-            case 'tail':
-                if (args[0]) {
-                    const lines = args.includes('-n') ? parseInt(args[args.indexOf('-n') + 1]) || 5 : 10;
-                    output = `Last ${lines} lines of ${args[0]}:\n...\nLine X-2: ...\nLine X-1: ...\nLine X: ...`;
-                    if (lesson.command === 'tail') success = true;
-                }
-                break;
-
-            case 'less':
-                if (args[0]) {
-                    output = `Viewing ${args[0]} (use q to quit, space to scroll):\n[File content displayed in pager]`;
-                    if (lesson.command === 'less') success = true;
-                }
-                break;
-
-            case 'chown':
-                if (args.length >= 2) {
-                    output = `Changed ownership of ${args[1]} to ${args[0]}`;
-                    if (lesson.command === 'chown') success = true;
-                }
-                break;
-
-            case 'df':
-                output = `Filesystem      Size  Used Avail Use% Mounted on\n/dev/sda1        50G   20G   28G  42% /\n/dev/sdb1       100G   45G   51G  47% /data`;
-                if (lesson.command === 'df') success = true;
-                break;
-
-            case 'du':
-                if (args[0]) {
-                    output = `4.0K    ${args[0]}`;
-                    if (lesson.command === 'du') success = true;
-                }
-                break;
-
-            case 'mount':
-                output = `/dev/sda1 on / type ext4 (rw,relatime)\n/dev/sdb1 on /data type ext4 (rw,relatime)`;
-                if (lesson.command === 'mount') success = true;
-                break;
-
-            case 'uname':
-                output = 'Linux server 5.15.0-91-generic #101-Ubuntu SMP x86_64 GNU/Linux';
-                if (lesson.command === 'uname') success = true;
-                break;
-
-            case 'ps':
-                output = `  PID TTY          TIME CMD\n    1 ?        00:00:01 systemd\n  234 ?        00:00:00 sshd\n  567 ?        00:00:02 apache2\n  890 pts/0    00:00:00 bash`;
-                if (lesson.command === 'ps') success = true;
-                break;
-
-            case 'top':
-                output = `top - 14:30:00 up 5 days, 2:15\nTasks: 150 total,   1 running, 149 sleeping\n%Cpu(s):  5.0 us,  2.0 sy,  0.0 ni, 92.0 id\nMiB Mem :   8192.0 total,   4096.0 free`;
-                if (lesson.command === 'top') success = true;
-                break;
-
-            case 'kill':
-                if (args[0]) {
-                    output = `Process ${args[0]} terminated`;
-                    if (lesson.command === 'kill') success = true;
-                }
-                break;
-
-            case 'pgrep':
-                if (args[0]) {
-                    output = `234\n567\n890`;
-                    if (lesson.command === 'pgrep') success = true;
-                }
-                break;
-
-            case 'help':
-                output = `Available commands:\n  pwd, ls, cd, clear, mkdir, touch, cp, mv, rm\n  cat, echo, man, grep, head, tail, less\n  chmod, chown, df, du, mount, uname\n  ps, top, kill, pgrep`;
-                break;
-
-            default:
-                output = `Command not found: ${baseCommand}. Type 'help' for available commands.`;
+        // 2. Handle System Updates & Overrides
+        if (output === 'CLEAR_SIGNAL') {
+            setTerminalHistory([]);
+            displayOutput = 'Screen cleared';
+        } else {
+            setFileSystem(newFileSystem);
+            const trimmedCommand = command.trim().replace(/\s+/g, ' ');
+            const displayPath = fileSystem.currentPath.replace('/home/student', '~');
+            setTerminalHistory(prev => [...prev,
+            { type: 'input', content: `student@cyberclub:${displayPath}$ ${trimmedCommand}`, path: displayPath, cmd: trimmedCommand },
+            { type: 'output', content: displayOutput }
+            ]);
         }
 
-        // Add to history
-        setTerminalHistory(prev => [...prev, 
-            { type: 'input', content: `${fileSystem.currentPath}$ ${trimmedCommand}` },
-            { type: 'output', content: output }
-        ]);
-
-        // Check if task completed
-        if (success && !completedLessons.includes(lesson.id)) {
-            setCompletedLessons(prev => [...prev, lesson.id]);
-            setTotalXP(prev => prev + lesson.xp);
-            
-            // Auto advance after 2 seconds
-            setTimeout(() => {
-                if (currentLesson < unit.lessons.length - 1) {
-                    setCurrentLesson(prev => prev + 1);
-                    setShowTheory(true);
-                }
-            }, 2000);
+        // 3. Question Logic
+        if (success && !completedSubTasks.includes(activeSubTask.id)) {
+            if (activeSubTask.question) {
+                setTimeout(() => {
+                    setShowQuestion(true);
+                    setQuestionStatus('waiting');
+                }, 600);
+            } else {
+                completeSubTask();
+            }
         }
-
         setTerminalInput('');
     };
 
-    const handleKeyDown = (e) => {
-        if (e.key === 'Enter') {
-            handleCommand(terminalInput);
+    const completeSubTask = () => {
+        const newCompleted = [...completedSubTasks, activeSubTask.id];
+        setCompletedSubTasks(newCompleted);
+        setTotalXP(prev => prev + activeSubTask.xp);
+        setShowQuestion(false);
+        setSelectedAnswer('');
+
+        const newProgress = Math.round((newCompleted.length / totalSubTasksCount) * 100);
+        apiCall('/simulators/progress/update', 'POST', {
+            simulator_id: 'bash-pro',
+            progress_percentage: newProgress,
+            is_completed: newProgress >= 100
+        }).catch(console.error);
+
+        setTimeout(() => {
+            if (currentSubTask < lesson.subTasks.length - 1) {
+                setCurrentSubTask(prev => prev + 1);
+            } else if (currentLesson < unit.lessons.length - 1) {
+                setCurrentLesson(prev => prev + 1);
+                setCurrentSubTask(0);
+                setShowTheory(true);
+                setExpandedLessons(prev => [...prev, currentLesson + 1]);
+            }
+        }, 1200);
+    };
+
+    const handleQuestionAnswer = (answer) => {
+        setSelectedAnswer(answer);
+        if (answer === activeSubTask.question.answer) {
+            setQuestionStatus('success');
+            setTimeout(() => completeSubTask(), 1200);
+        } else {
+            setQuestionStatus('error');
+            setTimeout(() => {
+                setQuestionStatus('waiting');
+                setSelectedAnswer('');
+            }, 1500);
         }
     };
 
-    // Auto-scroll terminal
+    const handleKeyDown = (e) => {
+        if (e.key === 'Enter') handleCommandInput(terminalInput);
+    };
+
     useEffect(() => {
-        if (terminalRef.current) {
-            terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
-        }
-    }, [terminalHistory]);
+        if (terminalRef.current) terminalRef.current.scrollTop = terminalRef.current.scrollHeight;
+    }, [terminalHistory, showQuestion]);
 
-    const progress = (completedLessons.length / totalLessons) * 100;
+    const progress = (completedSubTasks.length / totalSubTasksCount) * 100 || 0;
 
-    // Unit selection modal
+    // View: Presentation Intro
+    if (showIntro) {
+        const slide = BASH_THEORY_SLIDES[introSlide];
+        const SlideIcon = slide.icon;
+
+        return (
+            <div className="min-h-screen bg-[#050214] text-white font-cairo" dir="rtl">
+                <MatrixBackground opacity={0.3} />
+                <div className="relative z-10 min-h-screen flex items-center justify-center p-6 flex-col">
+                    <div className="w-full max-w-4xl flex items-center gap-2 mb-8">
+                        {BASH_THEORY_SLIDES.map((_, idx) => (
+                            <div key={idx} className="flex-1 h-2 rounded-full bg-white/10 overflow-hidden">
+                                <motion.div className="h-full bg-[#ff006e]" initial={{ width: 0 }} animate={{ width: idx <= introSlide ? '100%' : '0%' }} transition={{ duration: 0.5 }} />
+                            </div>
+                        ))}
+                    </div>
+
+                    <AnimatePresence mode="wait">
+                        <motion.div key={introSlide} initial={{ opacity: 0, x: 50, scale: 0.95 }} animate={{ opacity: 1, x: 0, scale: 1 }} exit={{ opacity: 0, x: -50, scale: 0.95 }} transition={{ duration: 0.4 }} className="max-w-4xl w-full bg-[#110C24] border border-[#ff006e]/30 rounded-3xl p-12 overflow-hidden relative shadow-[0_0_80px_rgba(255,0,110,0.15)] flex flex-col items-center text-center min-h-[400px]">
+                            <div className="absolute top-0 right-0 w-64 h-64 bg-[#ff006e]/10 blur-[100px] rounded-full pointer-events-none"></div>
+                            <div className="absolute bottom-0 left-0 w-64 h-64 bg-[#7112AF]/10 blur-[100px] rounded-full pointer-events-none"></div>
+
+                            <motion.div initial={{ scale: 0, rotate: -180 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: "spring", stiffness: 200, damping: 20, delay: 0.2 }} className="mb-8 w-24 h-24 rounded-full bg-white/5 flex items-center justify-center border border-white/10 shadow-xl" style={{ boxShadow: `0 0 40px ${slide.color}40` }}>
+                                <SlideIcon size={48} style={{ color: slide.color }} />
+                            </motion.div>
+
+                            <motion.h2 initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="text-4xl font-black mb-6 text-white">{slide.title}</motion.h2>
+                            <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }} className="text-xl text-gray-300 leading-relaxed max-w-2xl">{slide.desc}</motion.p>
+                        </motion.div>
+                    </AnimatePresence>
+
+                    <div className="mt-10 flex gap-4">
+                        {introSlide > 0 && <button onClick={() => setIntroSlide(p => p - 1)} className="px-6 py-3 bg-white/10 rounded-xl font-bold hover:bg-white/20 transition">السابق</button>}
+                        {introSlide < BASH_THEORY_SLIDES.length - 1 ? (
+                            <button onClick={() => setIntroSlide(p => p + 1)} className="px-8 py-3 bg-gradient-to-r from-[#ff006e] to-[#7112AF] rounded-xl font-bold hover:shadow-[0_0_30px_rgba(255,0,110,0.4)] flex gap-2">التالي <ArrowRight size={20} className="rotate-180" /></button>
+                        ) : (
+                            <button onClick={() => { setShowIntro(false); setShowUnits(true); }} className="px-8 py-3 bg-green-500 text-black rounded-xl font-bold hover:shadow-[0_0_30px_rgba(34,197,94,0.4)] flex gap-2">بدء التطبيق العملي <Terminal size={20} /></button>
+                        )}
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
     if (showUnits) {
         return (
             <div className="min-h-screen bg-[#050214] text-white font-cairo" dir="rtl">
                 <MatrixBackground opacity={0.3} />
-                
                 <div className="relative z-10 max-w-7xl mx-auto px-6 py-8">
                     <div className="flex items-center justify-between mb-8">
-                        <div className="flex items-center gap-4">
-                            {onBack && (
-                                <button
-                                    onClick={onBack}
-                                    className="p-2 bg-white/10 rounded-lg hover:bg-white/20 transition-colors"
-                                >
-                                    <ArrowRight size={20} className="rotate-180" />
-                                </button>
-                            )}
-                            <div className="p-3 bg-gradient-to-br from-[#240993] to-[#7112AF] rounded-lg">
-                                <Layers size={24} className="text-white" />
-                            </div>
-                            <div>
-                                <h1 className="text-2xl font-bold text-white">اختيار الوحدة</h1>
-                                <p className="text-gray-400">اختر وحدة التعلم التي تريد بدءها</p>
-                            </div>
-                        </div>
-                        
-                        <div className="flex items-center gap-2 px-4 py-2 bg-yellow-500/20 rounded-lg border border-yellow-500/30">
-                            <Star size={16} className="text-yellow-400" />
-                            <span className="text-yellow-400 font-bold">{totalXP} XP</span>
+                        <div className="flex gap-4">
+                            {onBack && <button onClick={onBack} className="p-2 bg-white/10 rounded-lg hover:bg-white/20"><ArrowRight size={20} className="rotate-180" /></button>}
+                            <div><h1 className="text-2xl font-bold">اختيار المستوى</h1><p className="text-gray-400">أي جزء تريد احترافه في الـ Bash؟</p></div>
                         </div>
                     </div>
-
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {Object.entries(CURRICULUM).map(([key, unitData]) => {
                             const UnitIcon = unitData.icon;
-                            const unitProgress = unitData.lessons.filter(l => completedLessons.includes(l.id)).length;
-                            const isCompleted = unitProgress === unitData.lessons.length;
-                            
+                            let completed = 0; let total = 0;
+                            unitData.lessons.forEach(l => { total += l.subTasks.length; l.subTasks.forEach(st => { if (completedSubTasks.includes(st.id)) completed++; }); });
+                            const isDone = completed === total && total > 0;
                             return (
-                                <motion.button
-                                    key={key}
-                                    whileHover={{ scale: 1.02 }}
-                                    whileTap={{ scale: 0.98 }}
-                                    onClick={() => {
-                                        setCurrentUnit(key);
-                                        setCurrentLesson(0);
-                                        setShowUnits(false);
-                                        setShowTheory(true);
-                                    }}
-                                    className={`p-6 rounded-xl border transition-all text-right ${
-                                        isCompleted 
-                                            ? 'bg-green-500/10 border-green-500/30' 
-                                            : 'bg-white/5 border-white/10 hover:border-[#7112AF]/50'
-                                    }`}
-                                >
-                                    <div className="flex items-start justify-between mb-4">
-                                        <div 
-                                            className="p-3 rounded-lg"
-                                            style={{ backgroundColor: `${unitData.color}20` }}
-                                        >
-                                            <UnitIcon size={32} style={{ color: unitData.color }} />
-                                        </div>
-                                        <div className="text-sm text-gray-400">
-                                            {unitProgress}/{unitData.lessons.length}
-                                        </div>
+                                <button key={key} onClick={() => { setCurrentUnit(key); setCurrentLesson(0); setCurrentSubTask(0); setShowUnits(false); setShowTheory(true); setExpandedLessons([0]); }} className={`p-6 rounded-xl border text-right transition ${isDone ? 'bg-green-500/10 border-green-500/30' : 'bg-white/5 border-white/10 hover:border-[#7112AF]'}`}>
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div className="p-3 rounded-lg" style={{ backgroundColor: `${unitData.color}20` }}><UnitIcon size={32} style={{ color: unitData.color }} /></div>
+                                        <div className="text-gray-400 text-sm">{completed}/{total} مهام</div>
                                     </div>
-                                    
-                                    <h3 className="text-xl font-bold text-white mb-2">{unitData.title}</h3>
-                                    <p className="text-gray-400 text-sm mb-4">{unitData.description}</p>
-                                    
-                                    <div className="flex items-center gap-2">
-                                        <div className="flex-1 bg-white/10 rounded-full h-2">
-                                            <div 
-                                                className="h-2 rounded-full transition-all"
-                                                style={{ 
-                                                    width: `${(unitProgress / unitData.lessons.length) * 100}%`,
-                                                    backgroundColor: unitData.color
-                                                }}
-                                            />
-                                        </div>
-                                        {isCompleted && (
-                                            <CheckCircle size={16} className="text-green-400" />
-                                        )}
-                                    </div>
-                                </motion.button>
+                                    <h3 className="text-xl font-bold mb-2">{unitData.title}</h3>
+                                    <p className="text-gray-400 text-sm leading-relaxed">{unitData.description}</p>
+                                </button>
                             );
                         })}
                     </div>
@@ -851,369 +224,152 @@ export default function BashSimulatorPro({ onBack }) {
     return (
         <div className="min-h-screen bg-[#050214] text-white font-cairo" dir="rtl">
             <MatrixBackground opacity={0.3} />
-            
-            {/* Top Navigation */}
-            <div className="relative z-10 border-b border-white/10 bg-[#0a0a0f]/90 backdrop-blur-md">
-                <div className="max-w-7xl mx-auto px-6 py-4">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                            {onBack && (
-                                <button
-                                    onClick={onBack}
-                                    className="p-2 bg-white/10 rounded-lg hover:bg-white/20 transition-colors"
-                                >
-                                    <ArrowRight size={20} className="rotate-180" />
-                                </button>
-                            )}
-                            <div 
-                                className="p-3 rounded-lg"
-                                style={{ background: `linear-gradient(135deg, ${unit.color}20, ${unit.color}40)` }}
-                            >
-                                <Terminal size={24} style={{ color: unit.color }} />
-                            </div>
-                            <div>
-                                <h1 className="text-xl font-bold text-white">محاكي Bash الاحترافي</h1>
-                                <p className="text-sm text-gray-400">{unit.title}</p>
-                            </div>
+            <div className="relative z-10 border-b border-white/10 bg-[#0a0a0f]/90">
+                <div className="max-w-7xl mx-auto px-6 py-4 flex justify-between items-center">
+                    <div className="flex gap-4 items-center">
+                        {onBack && <button onClick={onBack} className="p-2 bg-white/10 rounded-lg hover:bg-white/20"><ArrowRight size={20} className="rotate-180" /></button>}
+                        <button onClick={() => setShowUnits(true)} className="flex items-center gap-3 px-4 py-2 hover:bg-white/5 rounded-lg border border-transparent hover:border-white/10 transition">
+                            <div className="p-2 rounded-lg" style={{ background: `${unit?.color || '#ff006e'}30` }}><Terminal size={20} style={{ color: unit?.color || '#ff006e' }} /></div>
+                            <h1 className="text-sm font-bold flex gap-2">{unit?.title} <ChevronDown size={14} className="mt-1" /></h1>
+                        </button>
+                    </div>
+                    <div className="flex gap-4 items-center">
+                        <div className="text-right">
+                            <div className="text-sm font-bold">{Math.round(progress)}% إنجاز</div>
+                            <div className="w-32 bg-white/10 h-2 rounded-full mt-1"><motion.div className="h-2 rounded-full bg-gradient-to-r from-[#240993] to-[#7112AF]" animate={{ width: `${progress}%` }} /></div>
                         </div>
-
-                        <div className="flex items-center gap-6">
-                            {/* Progress */}
-                            <div className="flex items-center gap-3">
-                                <div className="text-left">
-                                    <div className="text-sm text-gray-400">التقدم الكلي</div>
-                                    <div className="text-lg font-bold text-white">{completedLessons.length}/{totalLessons}</div>
-                                </div>
-                                <div className="w-32 bg-white/10 rounded-full h-2">
-                                    <motion.div 
-                                        className="h-2 rounded-full bg-gradient-to-r from-[#240993] to-[#7112AF]"
-                                        initial={{ width: 0 }}
-                                        animate={{ width: `${progress}%` }}
-                                    />
-                                </div>
-                            </div>
-
-                            {/* XP */}
-                            <div className="flex items-center gap-2 px-4 py-2 bg-yellow-500/20 rounded-lg border border-yellow-500/30">
-                                <Star size={16} className="text-yellow-400" />
-                                <span className="text-yellow-400 font-bold">{totalXP} XP</span>
-                            </div>
-
-                            {/* Unit Selector */}
-                            <button
-                                onClick={() => setShowUnits(true)}
-                                className="flex items-center gap-2 px-4 py-2 bg-white/10 rounded-lg hover:bg-white/20 transition-colors"
-                            >
-                                <Layers size={18} />
-                                <span>الوحدات</span>
-                            </button>
-                        </div>
+                        <div className="bg-yellow-500/20 text-yellow-500 font-bold px-4 py-2 rounded-lg border border-yellow-500/30 flex gap-2"><Star size={16} /> {totalXP} XP</div>
                     </div>
                 </div>
             </div>
 
-            {/* Main Content */}
-            <div className="relative z-10 p-6">
-                <div className="max-w-7xl mx-auto">
-                    <div className="grid grid-cols-12 gap-6">
-                        
-                        {/* Left Panel - Lessons List */}
-                        <div className="col-span-3">
-                            <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
-                                <div className="p-4 border-b border-white/10">
-                                    <h3 className="font-bold text-white">دروس الوحدة</h3>
-                                    <p className="text-sm text-gray-400">{unit.subtitle}</p>
-                                </div>
-                                <div className="max-h-[calc(100vh-300px)] overflow-y-auto">
-                                    {unit.lessons.map((l, index) => (
-                                        <button
-                                            key={l.id}
-                                            onClick={() => {
-                                                setCurrentLesson(index);
-                                                setShowTheory(true);
-                                            }}
-                                            className={`w-full p-4 flex items-center gap-3 border-b border-white/5 hover:bg-white/5 transition-colors ${
-                                                currentLesson === index ? 'bg-[#7112AF]/20 border-r-2 border-r-[#7112AF]' : ''
-                                            } ${completedLessons.includes(l.id) ? 'opacity-60' : ''}`}
-                                        >
-                                            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                                                completedLessons.includes(l.id)
-                                                    ? 'bg-green-500/20 text-green-400'
-                                                    : currentLesson === index
-                                                    ? 'bg-[#7112AF]/20 text-[#7112AF]'
-                                                    : 'bg-white/10 text-gray-400'
-                                            }`}>
-                                                {completedLessons.includes(l.id) ? (
-                                                    <CheckCircle size={16} />
-                                                ) : (
-                                                    <span className="text-sm font-bold">{l.id}</span>
-                                                )}
-                                            </div>
-                                            <div className="flex-1 text-right">
-                                                <div className="text-sm font-medium text-white truncate">{l.title}</div>
-                                                <div className="text-xs text-gray-500">{l.command}</div>
-                                            </div>
-                                            <div className="text-xs text-yellow-400">+{l.xp}</div>
+            <div className="relative z-10 p-6 max-w-7xl mx-auto grid grid-cols-12 gap-6">
+                {/* Left Accordion Panel */}
+                <div className="col-span-3">
+                    <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden shadow-xl">
+                        <div className="p-4 border-b border-white/10 bg-black/40"><h3 className="font-bold text-white mb-1">مسار المستوى</h3></div>
+                        <div className="overflow-y-auto max-h-[70vh]">
+                            {unit?.lessons.map((l, index) => {
+                                const isExpanded = expandedLessons.includes(index);
+                                const isCurrentLesson = currentLesson === index;
+                                return (
+                                    <div key={l.id} className="border-b border-white/5">
+                                        <button onClick={() => { setExpandedLessons(p => p.includes(index) ? p.filter(i => i !== index) : [...p, index]); if (currentLesson !== index) { setCurrentLesson(index); setCurrentSubTask(0); setShowTheory(true); } }} className={`w-full p-4 flex justify-between items-center transition ${isCurrentLesson ? 'bg-white/10' : 'hover:bg-white/5'}`}>
+                                            <span className="font-bold text-sm text-right leading-relaxed">{l.title}</span>
+                                            {isExpanded ? <ChevronUp size={16} className="text-gray-400 shrink-0" /> : <ChevronDown size={16} className="text-gray-400 shrink-0" />}
                                         </button>
-                                    ))}
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Center - Theory & Terminal */}
-                        <div className="col-span-6">
-                            <AnimatePresence mode="wait">
-                                {showTheory ? (
-                                    <motion.div
-                                        key="theory"
-                                        initial={{ opacity: 0, y: 20 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        exit={{ opacity: 0, y: -20 }}
-                                        className="bg-gradient-to-br from-[#240993]/30 to-[#7112AF]/10 border border-[#7112AF]/30 rounded-xl p-8 mb-6"
-                                    >
-                                        {/* Concept Card */}
-                                        <div className="mb-6">
-                                            <div className="flex items-center gap-3 mb-4">
-                                                <div 
-                                                    className="p-3 rounded-lg"
-                                                    style={{ backgroundColor: `${unit.color}20` }}
-                                                >
-                                                    <BookOpen size={24} style={{ color: unit.color }} />
-                                                </div>
-                                                <div>
-                                                    <div className="text-sm text-gray-400">الدرس {lesson.id}</div>
-                                                    <h2 className="text-2xl font-bold text-white">{lesson.title}</h2>
-                                                </div>
-                                            </div>
-                                            
-                                            <div className="bg-white/5 rounded-xl p-6 border border-white/10">
-                                                <h3 className="text-lg font-bold mb-3" style={{ color: unit.color }}>المفهوم النظري</h3>
-                                                <p className="text-gray-300 leading-relaxed">{lesson.concept}</p>
-                                            </div>
-                                        </div>
-
-                                        {/* Command Box */}
-                                        <div className="bg-black/50 rounded-xl p-6 border border-white/10 mb-6">
-                                            <div className="flex items-center justify-between mb-4">
-                                                <h3 className="text-lg font-bold text-green-400">الأمر</h3>
-                                                <code className="px-4 py-2 bg-green-500/20 text-green-400 rounded-lg font-mono text-lg">
-                                                    {lesson.command}
-                                                </code>
-                                            </div>
-                                            <div className="bg-white/5 rounded-lg p-4">
-                                                <h4 className="text-sm font-bold text-gray-400 mb-2">المهمة</h4>
-                                                <p className="text-white">{lesson.task}</p>
-                                            </div>
-                                        </div>
-
-                                        {/* Hint */}
-                                        <div className="flex items-start gap-3 bg-yellow-500/10 rounded-lg p-4 border border-yellow-500/30">
-                                            <Lightbulb size={20} className="text-yellow-400 mt-1" />
-                                            <div>
-                                                <h4 className="text-sm font-bold text-yellow-400 mb-1">تلميح</h4>
-                                                <p className="text-gray-300 text-sm">{lesson.hint}</p>
-                                            </div>
-                                        </div>
-
-                                        {/* Start Button */}
-                                        <button
-                                            onClick={() => setShowTheory(false)}
-                                            className="w-full mt-6 py-4 bg-gradient-to-r from-[#7112AF] to-[#ff006e] text-white font-bold rounded-xl hover:shadow-[0_0_30px_rgba(113,18,175,0.5)] transition-all flex items-center justify-center gap-2"
-                                        >
-                                            <PlayCircle size={24} />
-                                            فهمت، ابدأ التنفيذ
-                                        </button>
-                                    </motion.div>
-                                ) : (
-                                    <motion.div
-                                        key="terminal"
-                                        initial={{ opacity: 0, y: 20 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        exit={{ opacity: 0, y: -20 }}
-                                    >
-                                        {/* Task Bar */}
-                                        <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-4">
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-3">
-                                                    <Target size={20} className="text-[#7112AF]" />
-                                                    <span className="text-white font-bold">المهمة {currentLesson + 1}/{unit.lessons.length}:</span>
-                                                    <span className="text-gray-300">{lesson.task}</span>
-                                                </div>
-                                                <button
-                                                    onClick={() => setShowTheory(true)}
-                                                    className="px-3 py-1 bg-[#7112AF]/20 text-[#7112AF] rounded-lg text-sm hover:bg-[#7112AF]/30 transition-colors"
-                                                >
-                                                    عرض الشرح
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        {/* Terminal */}
-                                        <div className="bg-black rounded-xl border border-white/20 overflow-hidden shadow-2xl">
-                                            {/* Terminal Header */}
-                                            <div className="bg-white/10 px-4 py-3 flex items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <div className="flex gap-2">
-                                                        <div className="w-3 h-3 rounded-full bg-red-500"></div>
-                                                        <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-                                                        <div className="w-3 h-3 rounded-full bg-green-500"></div>
-                                                    </div>
-                                                    <span className="text-gray-400 text-sm ml-4 font-mono">bash — 80×24</span>
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    <button
-                                                        onClick={() => setTerminalHistory([])}
-                                                        className="p-1 hover:bg-white/10 rounded"
-                                                    >
-                                                        <RotateCcw size={14} className="text-gray-400" />
-                                                    </button>
-                                                </div>
-                                            </div>
-
-                                            {/* Terminal Body */}
-                                            <div 
-                                                ref={terminalRef}
-                                                className="p-4 h-80 overflow-y-auto font-mono text-sm" dir="ltr"
-                                            >
-                                                {terminalHistory.length === 0 && (
-                                                    <div className="text-gray-500 mb-4">
-                                                        Welcome to Bash Simulator v2.0<br />
-                                                        Type 'help' for available commands.<br />
-                                                        Current directory: {fileSystem.currentPath}
-                                                    </div>
-                                                )}
-                                                
-                                                {terminalHistory.map((entry, index) => (
-                                                    <div key={index} className="mb-2">
-                                                        {entry.type === 'input' ? (
-                                                            <div className="text-green-400">{entry.content}</div>
-                                                        ) : (
-                                                            <div className="text-white whitespace-pre-wrap">{entry.content}</div>
-                                                        )}
-                                                    </div>
-                                                ))}
-
-                                                {/* Input Line */}
-                                                <div className="flex items-center">
-                                                    <span className="text-green-400 mr-2">{fileSystem.currentPath}$</span>
-                                                    <input
-                                                        type="text"
-                                                        value={terminalInput}
-                                                        onChange={(e) => setTerminalInput(e.target.value)}
-                                                        onKeyDown={handleKeyDown}
-                                                        className="flex-1 bg-transparent border-none outline-none text-white font-mono"
-                                                        placeholder="Enter command..."
-                                                        autoFocus
-                                                        spellCheck={false}
-                                                        dir="ltr"
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Quick Help */}
-                                        <div className="mt-4 flex flex-wrap gap-2">
-                                            <span className="text-gray-400 text-sm">أوامر سريعة:</span>
-                                            {['pwd', 'ls', 'cd', 'mkdir', 'touch', 'cp', 'mv', 'rm', 'cat', 'echo'].map(cmd => (
-                                                <button
-                                                    key={cmd}
-                                                    onClick={() => setTerminalInput(cmd + ' ')}
-                                                    className="px-2 py-1 bg-white/5 text-gray-400 rounded text-xs hover:bg-white/10 transition-colors"
-                                                >
-                                                    {cmd}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-                        </div>
-
-                        {/* Right Panel - File System & Stats */}
-                        <div className="col-span-3 space-y-6">
-                            {/* File System Visual */}
-                            <div className="bg-white/5 border border-white/10 rounded-xl overflow-hidden">
-                                <div className="p-4 border-b border-white/10 flex items-center justify-between">
-                                    <h3 className="font-bold text-white flex items-center gap-2">
-                                        <Folder size={18} className="text-yellow-400" />
-                                        نظام الملفات
-                                    </h3>
-                                    <span className="text-xs text-gray-400 font-mono">{fileSystem.currentPath}</span>
-                                </div>
-                                <div className="p-4 space-y-2">
-                                    {fileSystem.files.map((file, index) => (
-                                        <motion.div
-                                            key={index}
-                                            initial={{ opacity: 0, x: 20 }}
-                                            animate={{ opacity: 1, x: 0 }}
-                                            transition={{ delay: index * 0.05 }}
-                                            className={`flex items-center gap-3 p-2 rounded-lg cursor-pointer transition-colors ${
-                                                fileSystem.selectedFile === file ? 'bg-[#7112AF]/20' : 'hover:bg-white/5'
-                                            }`}
-                                            onClick={() => setFileSystem(prev => ({ ...prev, selectedFile: file }))}
-                                        >
-                                            {file.endsWith('/') ? (
-                                                <Folder size={18} className="text-yellow-400" />
-                                            ) : (
-                                                <FileText size={18} className="text-blue-400" />
+                                        <AnimatePresence>
+                                            {isExpanded && (
+                                                <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} className="overflow-hidden bg-black/40">
+                                                    {l.subTasks.map((st, sIdx) => {
+                                                        const isDone = completedSubTasks.includes(st.id);
+                                                        const isCur = currentLesson === index && currentSubTask === sIdx;
+                                                        return (
+                                                            <button key={st.id} onClick={() => { setCurrentLesson(index); setCurrentSubTask(sIdx); setShowTheory(false); }} className={`w-full p-3 pl-6 flex items-center gap-3 border-l-2 text-right transition ${isCur ? 'border-[#7112AF] bg-[#7112AF]/10' : 'border-transparent hover:bg-white/5'}`}>
+                                                                {isDone ? <CheckCircle size={14} className="text-green-500 shrink-0" /> : <div className="w-3.5 h-3.5 rounded-full border border-gray-500 shrink-0" />}
+                                                                <div className={`text-xs font-mono ${isCur ? 'text-white' : 'text-gray-400'}`}>{st.command}</div>
+                                                            </button>
+                                                        );
+                                                    })}
+                                                </motion.div>
                                             )}
-                                            <span className="text-sm text-gray-300">{file}</span>
-                                        </motion.div>
-                                    ))}
-                                    {fileSystem.hiddenFiles.map((file, index) => (
-                                        <motion.div
-                                            key={`hidden-${index}`}
-                                            initial={{ opacity: 0 }}
-                                            animate={{ opacity: 0.5 }}
-                                            className="flex items-center gap-3 p-2 rounded-lg"
-                                        >
-                                            <FileText size={18} className="text-gray-600" />
-                                            <span className="text-sm text-gray-500">{file}</span>
-                                        </motion.div>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Lesson Stats */}
-                            <div className="bg-gradient-to-br from-[#7112AF]/20 to-[#ff006e]/10 border border-[#7112AF]/30 rounded-xl p-4">
-                                <h3 className="font-bold text-white mb-4 flex items-center gap-2">
-                                    <BarChart3 size={18} className="text-[#7112AF]" />
-                                    إحصائيات الدرس
-                                </h3>
-                                <div className="space-y-3">
-                                    <div className="flex justify-between">
-                                        <span className="text-gray-400 text-sm">الأمر</span>
-                                        <code className="text-green-400 font-mono">{lesson.command}</code>
+                                        </AnimatePresence>
                                     </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-gray-400 text-sm">النقاط</span>
-                                        <span className="text-yellow-400 font-bold">+{lesson.xp} XP</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-gray-400 text-sm">الحالة</span>
-                                        <span className={`text-sm ${completedLessons.includes(lesson.id) ? 'text-green-400' : 'text-gray-400'}`}>
-                                            {completedLessons.includes(lesson.id) ? 'مكتمل' : 'قيد التنفيذ'}
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Help Panel */}
-                            <div className="bg-white/5 border border-white/10 rounded-xl p-4">
-                                <h3 className="font-bold text-white mb-3 flex items-center gap-2">
-                                    <HelpCircle size={18} className="text-blue-400" />
-                                    مساعدة
-                                </h3>
-                                <div className="space-y-2 text-sm text-gray-400">
-                                    <p>• اكتب الأمر في الطرفية</p>
-                                    <p>• اضغط Enter للتنفيذ</p>
-                                    <p>• استخدم التلميح إذا علقت</p>
-                                    <p>• أكمل المهمة للحصول على XP</p>
-                                </div>
-                            </div>
+                                );
+                            })}
                         </div>
                     </div>
                 </div>
+
+                {/* Center Terminal / Theory */}
+                <div className="col-span-6">
+                    <AnimatePresence mode="wait">
+                        {showTheory ? (
+                            <motion.div key="theory" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }} className="bg-gradient-to-br from-[#240993]/20 to-[#7112AF]/20 border border-[#7112AF]/40 rounded-xl p-8 backdrop-blur-sm shadow-2xl">
+                                <div className="flex gap-4 mb-6"><div className="p-4 bg-[#7112AF]/20 rounded-xl"><BookOpen size={30} className="text-[#7112AF]" /></div><div><div className="text-sm text-gray-400">فهم المبادئ:</div><h2 className="text-2xl font-bold">{lesson?.title}</h2></div></div>
+                                <p className="text-gray-300 text-lg leading-relaxed mb-8 p-6 bg-black/50 rounded-lg border border-white/5">{lesson?.concept}</p>
+                                <h3 className="font-bold text-[#ff006e] mb-3">المهام في هذا الدرس:</h3>
+                                <div className="space-y-3 mb-8">
+                                    {lesson?.subTasks.map((t, i) => (
+                                        <div key={i} className="flex gap-3 items-center p-3 bg-white/5 rounded-lg border border-white/10">
+                                            <code className="bg-black/80 px-3 py-1.5 rounded text-[#10b981] font-mono min-w-[80px] text-center border border-white/5">{t.command}</code>
+                                            <span className="text-sm text-gray-300 leading-relaxed">{t.task}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                                <button onClick={() => setShowTheory(false)} className="w-full py-4 bg-gradient-to-r from-[#7112AF] to-[#ff006e] rounded-xl font-bold flex justify-center gap-2 hover:shadow-[0_0_20px_rgba(255,0,110,0.4)] transition"><Terminal size={20} /> الانتقال للطرفية والتطبيق</button>
+                            </motion.div>
+                        ) : (
+                            <motion.div key="terminal" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
+                                <div className="bg-[#110C24] border border-[#ff006e]/30 rounded-t-xl p-4 flex justify-between items-center shadow-lg">
+                                    <div><div className="text-xs text-[#ff006e] font-bold mb-1 uppercase">الهدف النشط</div><div className="font-bold flex gap-2 text-sm max-w-lg leading-relaxed"><Target size={16} className="text-gray-400 shrink-0" />{activeSubTask?.task}</div></div>
+                                    <button onClick={() => setShowTheory(true)} className="px-3 py-1 bg-white/10 hover:bg-white/20 rounded-lg text-xs font-bold transition">المفهوم النظري</button>
+                                </div>
+                                <div className={`bg-black rounded-b-xl border border-t-0 shadow-2xl overflow-hidden ${showQuestion ? 'border-yellow-500/50' : 'border-[#ff006e]/30'}`}>
+                                    <div className="bg-[#1a1b26] px-4 py-2 flex justify-between border-b border-white/10"><div className="flex gap-2"><div className="w-3 h-3 rounded-full bg-red-500"></div><div className="w-3 h-3 rounded-full bg-yellow-500"></div><div className="w-3 h-3 rounded-full bg-green-500"></div></div><button onClick={() => setTerminalHistory([])} className="text-gray-500 hover:text-white"><RotateCcw size={14} /></button></div>
+                                    <div ref={terminalRef} className="h-96 overflow-y-auto p-4 font-mono text-sm relative" dir="ltr">
+                                        {terminalHistory.map((entry, idx) => (
+                                            <div key={idx} className="mb-3 break-all">
+                                                {entry.type === 'input' ? <div className="flex gap-2"><span className="text-green-400 whitespace-nowrap">student@cyberclub:<span className="text-blue-400">{entry.path}</span>$</span><span className="text-white">{entry.cmd}</span></div> : <div className="text-gray-300 whitespace-pre-wrap leading-relaxed">{entry.content}</div>}
+                                            </div>
+                                        ))}
+                                        {showQuestion ? (
+                                            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="mt-6 border border-yellow-500/30 bg-yellow-500/10 p-5 rounded-xl relative shadow-2xl" dir="rtl">
+                                                <div className="flex gap-3 mb-4"><HelpCircle size={24} className="text-yellow-400" /><h3 className="font-bold text-lg text-white">تحدي المخرجات: أثبت فهمك</h3></div>
+                                                <p className="text-gray-300 mb-6 text-sm leading-relaxed">{activeSubTask?.question?.text}</p>
+                                                <div className="grid grid-cols-2 gap-3">
+                                                    {activeSubTask?.question?.options.map((opt, i) => (
+                                                        <button key={i} onClick={() => handleQuestionAnswer(opt)} disabled={questionStatus !== 'waiting'} className={`p-3 rounded-lg text-sm border text-right transition ${selectedAnswer === opt ? (questionStatus === 'success' ? 'bg-green-500/20 border-green-500 text-green-400' : 'bg-red-500/20 border-red-500 text-red-400') : 'bg-black/50 border-white/20 hover:border-yellow-400/50 hover:bg-yellow-400/10'}`}>{opt}</button>
+                                                    ))}
+                                                </div>
+                                                {questionStatus === 'success' && <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 bg-green-500/20 backdrop-blur-sm flex items-center justify-center"><div className="bg-green-500 text-black px-6 py-2 rounded-full font-bold flex gap-2 shadow-2xl"><CheckCircle size={20} /> إجابة صحيحة!</div></motion.div>}
+                                            </motion.div>
+                                        ) : (
+                                            <div className="flex items-center mt-2"><span className="text-green-400 whitespace-nowrap mr-2">student@cyberclub:<span className="text-blue-400">{fileSystem.currentPath.replace('/home/student', '~')}</span>$</span><input type="text" value={terminalInput} onChange={e => setTerminalInput(e.target.value)} onKeyDown={handleKeyDown} className="flex-1 bg-transparent text-white outline-none" autoFocus spellCheck={false} /></div>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="mt-4 p-4 border border-blue-500/20 bg-blue-500/5 rounded-xl flex gap-3 shadow-lg"><Lightbulb className="text-blue-400 shrink-0 mt-0.5" size={18} /><div><div className="text-blue-400 font-bold mb-1 text-sm">تلميح</div><div className="text-gray-400 text-sm leading-relaxed">{activeSubTask?.hint}</div></div></div>
+
+                                {/* Command Details Box */}
+                                {activeSubTask?.details && (
+                                    <div className="mt-4 p-5 border border-[#7112AF]/30 bg-[#7112AF]/10 rounded-xl text-right shadow-lg">
+                                        <div className="flex items-center gap-2 mb-4">
+                                            <Info className="text-[#a78bfa] shrink-0" size={18} />
+                                            <h4 className="text-[#a78bfa] font-bold text-sm">تشريح الأمر (Command Anatomy)</h4>
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                                            <div className="bg-black/50 p-3 rounded-lg border border-white/5 shadow-inner">
+                                                <div className="text-xs text-gray-500 mb-1">مسار التنفيذ (Binary Path)</div>
+                                                <div className="font-mono text-[#a78bfa]">{activeSubTask.details.path}</div>
+                                            </div>
+                                            <div className="bg-black/50 p-3 rounded-lg border border-white/5 shadow-inner">
+                                                <div className="text-xs text-gray-500 mb-1">الاسم الكامل (Full Name)</div>
+                                                <div className="text-gray-300">{activeSubTask.details.usage}</div>
+                                            </div>
+                                            <div className="bg-black/50 p-4 rounded-lg border border-white/5 shadow-inner md:col-span-2">
+                                                <div className="text-xs text-gray-500 mb-2">طريقة العمل (Under the hood)</div>
+                                                <div className="text-gray-300 leading-relaxed">{activeSubTask.details.desc}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </motion.div>
+                        )}
+                    </AnimatePresence>
+                </div>
+
+                {/* Right Panel File System */}
+                <div className="col-span-3 space-y-4">
+                    <div className="bg-[#110C24] border border-[#7112AF]/30 rounded-xl overflow-hidden shadow-xl">
+                        <div className="p-4 bg-black/40 border-b border-white/10"><h3 className="font-bold flex gap-2 text-sm"><Folder size={16} className="text-[#a78bfa]" /> نظام الملفات التخيلي</h3></div>
+                        <div className="p-4 space-y-2 max-h-[350px] overflow-y-auto">
+                            {fileSystem.files.map((file, i) => <div key={i} className="flex gap-2 items-center p-2 rounded hover:bg-white/5 transition"><Folder size={16} className="text-yellow-500" /><span className="text-sm text-gray-300 break-all">{file}</span></div>)}
+                            {fileSystem.hiddenFiles.map((file, i) => <div key={`h-${i}`} className="flex gap-2 items-center p-2 opacity-50"><EyeOff size={16} className="text-gray-500" /><span className="text-sm text-gray-400 break-all">{file}</span></div>)}
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </div>
     );

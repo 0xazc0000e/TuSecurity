@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { 
+import {
     Terminal, Shield, Target, Cpu, Zap, ArrowRight, Filter, Search,
     Grid, List, ChevronDown, PlayCircle, Star, Clock, BarChart3,
     Award, Users, BookOpen, Code, Globe, Database, Lock, Wifi,
@@ -9,18 +9,66 @@ import {
 import { MatrixBackground } from '../components/ui/MatrixBackground';
 import BashSimulatorPro from '../components/simulators/BashSimulatorPro';
 import AttackSimulatorPro from '../components/simulators/AttackSimulatorPro';
+import { apiCall } from '../context/AuthContext';
 
 export default function SimulatorsHub() {
-    const [showIntro, setShowIntro] = useState(true);
     const [selectedSimulator, setSelectedSimulator] = useState(null);
-    
+    const [progressMap, setProgressMap] = useState({});
+    const [loadingProgress, setLoadingProgress] = useState(true);
+
     // Filter states
-    const [filterCategory, setFilterCategory] = useState('all');
+    const [activeTab, setActiveTab] = useState('tools');
     const [filterLevel, setFilterLevel] = useState('all');
     const [filterField, setFilterField] = useState('all');
     const [searchTerm, setSearchTerm] = useState('');
     const [sortBy, setSortBy] = useState('popular');
     const [viewMode, setViewMode] = useState('grid');
+    const [startingSimulatorId, setStartingSimulatorId] = useState(null);
+
+    const handleStartSimulator = async (simulator) => {
+        try {
+            setStartingSimulatorId(simulator.id);
+            await apiCall(`/simulators/start/${simulator.id}`, 'POST');
+            setSelectedSimulator(simulator);
+        } catch (error) {
+            console.error('Failed to start simulator:', error);
+            // Open it anyway to avoid blocking user if backend is missing temporarily
+            setSelectedSimulator(simulator);
+        } finally {
+            setStartingSimulatorId(null);
+        }
+    };
+
+    // Fetch user progress on mount
+    React.useEffect(() => {
+        const fetchProgress = async () => {
+            try {
+                const data = await apiCall('/simulators/progress');
+                if (data && Array.isArray(data)) {
+                    const mappedProgress = {};
+                    data.forEach(item => {
+                        // Store the percentage mapped by string ID 
+                        // Note: Depending on backend returns simulator ID might be an int or a string
+                        mappedProgress[item.simulator_id.toString()] = item.progress_percentage || 0;
+                    });
+
+                    // Specific mapping for hardcoded simulator IDs since they differ from int database IDs right now
+                    if (data.length > 0) {
+                        // Force a fallback mapping if the DB is still empty or ID format mismatches the strings 'bash-pro'/'attack-operation'
+                        mappedProgress['bash-pro'] = data.find(p => p.type === 'tool' || String(p.simulator_id) === '1')?.progress_percentage || 0;
+                        mappedProgress['attack-operation'] = data.find(p => p.type === 'attack' || String(p.simulator_id) === '2')?.progress_percentage || 0;
+                    }
+                    setProgressMap(mappedProgress);
+                }
+            } catch (err) {
+                console.error("Failed to load simulator progress:", err);
+            } finally {
+                setLoadingProgress(false);
+            }
+        };
+
+        fetchProgress();
+    }, []);
 
     const SIMULATORS = [
         {
@@ -58,9 +106,8 @@ export default function SimulatorsHub() {
     ];
 
     const CATEGORIES = [
-        { id: 'all', label: 'الكل', icon: Grid },
         { id: 'tools', label: 'محاكي الأدوات', icon: Terminal },
-        { id: 'attacks', label: 'محاكي الهجمات', icon: Shield }
+        { id: 'attacks', label: 'محاكي السيناريوهات', icon: Shield }
     ];
 
     const LEVELS = [
@@ -81,12 +128,12 @@ export default function SimulatorsHub() {
 
     // Filter simulators
     const filteredSimulators = SIMULATORS.filter(sim => {
-        const matchesCategory = filterCategory === 'all' || sim.category === filterCategory;
+        const matchesCategory = sim.category === activeTab;
         const matchesLevel = filterLevel === 'all' || sim.level === filterLevel;
         const matchesField = filterField === 'all' || sim.field === filterField;
         const matchesSearch = sim.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                             sim.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                             sim.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
+            sim.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            sim.tags.some(tag => tag.toLowerCase().includes(searchTerm.toLowerCase()));
         return matchesCategory && matchesLevel && matchesField && matchesSearch;
     }).sort((a, b) => {
         switch (sortBy) {
@@ -95,7 +142,10 @@ export default function SimulatorsHub() {
             case 'newest': return b.id.localeCompare(a.id);
             default: return 0;
         }
-    });
+    }).map(sim => ({
+        ...sim,
+        progress: progressMap[sim.id] || 0
+    }));
 
     const getLevelBadge = (level) => {
         const styles = {
@@ -122,7 +172,7 @@ export default function SimulatorsHub() {
         };
         const labels = {
             tools: 'أدوات',
-            attacks: 'هجمات'
+            attacks: 'سيناريوهات'
         };
         return (
             <span className={`px-3 py-1 rounded-full text-xs font-bold ${styles[category]}`}>
@@ -132,69 +182,21 @@ export default function SimulatorsHub() {
     };
 
     const tabs = [
-        { 
-            id: 'tools', 
-            label: 'محاكي الأدوات', 
+        {
+            id: 'tools',
+            label: 'محاكي الأدوات',
             icon: Terminal,
             color: 'from-[#7112AF] to-[#240993]',
             description: 'تعلم أدوات الأمن السيبراني مع بيئة تفاعلية'
         },
-        { 
-            id: 'attacks', 
-            label: 'محاكي الهجمات', 
+        {
+            id: 'attacks',
+            label: 'محاكي السيناريوهات',
             icon: Shield,
             color: 'from-[#ff006e] to-[#7112AF]',
             description: 'اختبر مهاراتك في سيناريوهات هجومية ودفاعية'
         }
     ];
-
-    if (showIntro) {
-        return (
-            <div className="min-h-screen bg-[#050214] text-white font-cairo relative" dir="rtl">
-                <MatrixBackground />
-                
-                <div className="relative z-10 flex flex-col items-center justify-center min-h-screen px-6">
-                    <motion.div
-                        initial={{ opacity: 0, y: 30 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="text-center max-w-4xl"
-                    >
-                        <div className="flex justify-center gap-8 mb-8">
-                            <motion.div
-                                whileHover={{ scale: 1.1 }}
-                                className="w-24 h-24 bg-gradient-to-br from-[#7112AF] to-[#240993] rounded-2xl flex items-center justify-center shadow-[0_0_40px_rgba(113,18,175,0.5)]"
-                            >
-                                <Terminal size={48} className="text-white" />
-                            </motion.div>
-                            <motion.div
-                                whileHover={{ scale: 1.1 }}
-                                className="w-24 h-24 bg-gradient-to-br from-[#ff006e] to-[#7112AF] rounded-2xl flex items-center justify-center shadow-[0_0_40px_rgba(255,0,110,0.5)]"
-                            >
-                                <Shield size={48} className="text-white" />
-                            </motion.div>
-                        </div>
-
-                        <h1 className="text-5xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-white via-purple-200 to-white bg-clip-text text-transparent">
-                            مركز المحاكاة التفاعلية
-                        </h1>
-                        
-                        <p className="text-xl text-gray-400 mb-12 max-w-2xl mx-auto">
-                            تعلم الأمن السيبراني بشكل عملي من خلال محاكيات متقدمة 
-                            تجمع بين الأدوات والهجمات في بيئة آمنة ومتحكمة
-                        </p>
-
-                        <button
-                            onClick={() => setShowIntro(false)}
-                            className="px-8 py-4 bg-gradient-to-r from-[#7112AF] to-[#ff006e] text-white font-bold rounded-xl hover:shadow-[0_0_30px_rgba(113,18,175,0.5)] transition-all flex items-center gap-2 mx-auto"
-                        >
-                            <PlayCircle size={24} />
-                            استكشف المحاكيات
-                        </button>
-                    </motion.div>
-                </div>
-            </div>
-        );
-    }
 
     // Show specific simulator
     if (selectedSimulator) {
@@ -209,24 +211,18 @@ export default function SimulatorsHub() {
     return (
         <div className="min-h-screen bg-[#050214] text-white font-cairo" dir="rtl">
             <MatrixBackground />
-            
+
             {/* Header */}
             <div className="relative z-10 border-b border-white/10 bg-[#0a0a0f]/80 backdrop-blur-md">
                 <div className="max-w-7xl mx-auto px-6 py-4">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between pl-6 pr-6">
                         <div className="flex items-center gap-4">
-                            <button
-                                onClick={() => setShowIntro(true)}
-                                className="p-2 bg-white/10 rounded-lg hover:bg-white/20 transition-colors"
-                            >
-                                <ArrowRight size={20} className="rotate-180" />
-                            </button>
-                            <div className="p-3 bg-[#7112AF]/20 rounded-lg">
-                                <Terminal size={24} className="text-[#7112AF]" />
+                            <div className="p-3 bg-gradient-to-r from-[#7112AF] to-[#ff006e] rounded-lg shadow-lg">
+                                <Terminal size={24} className="text-white" />
                             </div>
                             <div>
-                                <h1 className="text-2xl font-bold text-white">مركز المحاكاة</h1>
-                                <p className="text-gray-400 text-sm">اختر محاكياً وابدأ رحلة التعلم</p>
+                                <h1 className="text-2xl font-bold text-white tracking-wide">بيئة المحاكاة التفاعلية</h1>
+                                <p className="text-gray-400 text-sm">اختر محاكياً وابدأ رحلة التعلم العملية</p>
                             </div>
                         </div>
 
@@ -240,6 +236,46 @@ export default function SimulatorsHub() {
             </div>
 
             <div className="relative z-10">
+                {/* Tabs Bar */}
+                <div className="max-w-7xl mx-auto px-6 pt-6">
+                    <div className="flex gap-4 mb-2 overflow-x-auto pb-4 hide-scrollbar">
+                        {tabs.map((tab) => {
+                            const TabIcon = tab.icon;
+                            const isActive = activeTab === tab.id;
+                            return (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setActiveTab(tab.id)}
+                                    className={`relative flex items-center gap-3 px-6 py-4 rounded-xl transition-all duration-300 min-w-[240px] ${isActive
+                                        ? `bg-gradient-to-r ${tab.color} text-white shadow-lg`
+                                        : 'bg-white/5 text-gray-400 hover:bg-white/10 border border-white/10'
+                                        }`}
+                                >
+                                    <div className={`p-2 rounded-lg ${isActive ? 'bg-white/20' : 'bg-white/5'}`}>
+                                        <TabIcon size={20} className={isActive ? 'text-white' : 'text-gray-400'} />
+                                    </div>
+                                    <div className="text-right">
+                                        <h3 className={`font-bold ${isActive ? 'text-white' : 'text-gray-200'}`}>
+                                            {tab.label}
+                                        </h3>
+                                        <p className={`text-xs mt-1 ${isActive ? 'text-white/80' : 'text-gray-500'}`}>
+                                            {tab.description}
+                                        </p>
+                                    </div>
+                                    {isActive && (
+                                        <motion.div
+                                            layoutId="activeTabBadge"
+                                            className="absolute inset-0 border-2 border-white/20 rounded-xl"
+                                            initial={false}
+                                            transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                                        />
+                                    )}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+
                 {/* Filters Bar */}
                 <div className="max-w-7xl mx-auto px-6 py-6">
                     <div className="bg-white/5 border border-white/10 rounded-xl p-4 mb-6">
@@ -255,17 +291,6 @@ export default function SimulatorsHub() {
                                     className="w-full pr-12 pl-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:border-[#7112AF]"
                                 />
                             </div>
-
-                            {/* Category Filter */}
-                            <select
-                                value={filterCategory}
-                                onChange={(e) => setFilterCategory(e.target.value)}
-                                className="px-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-[#7112AF]"
-                            >
-                                <option value="all">جميع الفئات</option>
-                                <option value="tools">محاكي الأدوات</option>
-                                <option value="attacks">محاكي الهجمات</option>
-                            </select>
 
                             {/* Level Filter */}
                             <select
@@ -317,10 +342,9 @@ export default function SimulatorsHub() {
                             </div>
 
                             {/* Clear Filters */}
-                            {(filterCategory !== 'all' || filterLevel !== 'all' || filterField !== 'all' || searchTerm) && (
+                            {(filterLevel !== 'all' || filterField !== 'all' || searchTerm) && (
                                 <button
                                     onClick={() => {
-                                        setFilterCategory('all');
                                         setFilterLevel('all');
                                         setFilterField('all');
                                         setSearchTerm('');
@@ -333,14 +357,9 @@ export default function SimulatorsHub() {
                         </div>
 
                         {/* Active Filters Display */}
-                        {(filterCategory !== 'all' || filterLevel !== 'all' || filterField !== 'all') && (
+                        {(filterLevel !== 'all' || filterField !== 'all') && (
                             <div className="flex items-center gap-2 mt-4 pt-4 border-t border-white/10">
                                 <span className="text-gray-400 text-sm">عوامل التصفية النشطة:</span>
-                                {filterCategory !== 'all' && (
-                                    <span className="px-3 py-1 bg-[#7112AF]/20 text-[#7112AF] rounded-full text-xs">
-                                        الفئة: {CATEGORIES.find(c => c.id === filterCategory)?.label}
-                                    </span>
-                                )}
                                 {filterLevel !== 'all' && (
                                     <span className="px-3 py-1 bg-yellow-500/20 text-yellow-400 rounded-full text-xs">
                                         المستوى: {LEVELS.find(l => l.id === filterLevel)?.label}
@@ -368,9 +387,8 @@ export default function SimulatorsHub() {
                                     initial={{ opacity: 0, y: 20 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     transition={{ delay: index * 0.1 }}
-                                    className={`bg-white/5 border border-white/10 rounded-xl overflow-hidden hover:border-[#7112AF]/50 transition-all group cursor-pointer ${
-                                        viewMode === 'list' ? 'flex' : ''
-                                    }`}
+                                    className={`bg-white/5 border border-white/10 rounded-xl overflow-hidden hover:border-[#7112AF]/50 transition-all group cursor-pointer ${viewMode === 'list' ? 'flex' : ''
+                                        }`}
                                     onClick={() => setSelectedSimulator(simulator)}
                                 >
                                     {/* Icon/Thumbnail */}
@@ -419,10 +437,31 @@ export default function SimulatorsHub() {
                                         </div>
 
                                         {/* Action */}
-                                        <button className="w-full py-3 bg-gradient-to-r from-[#7112AF] to-[#ff006e] text-white font-bold rounded-lg hover:shadow-[0_0_20px_rgba(113,18,175,0.5)] transition-all flex items-center justify-center gap-2">
-                                            <PlayCircle size={20} />
-                                            بدء المحاكاة
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleStartSimulator(simulator);
+                                            }}
+                                            disabled={startingSimulatorId === simulator.id}
+                                            className={`w-full py-3 bg-gradient-to-r from-[#7112AF] to-[#ff006e] text-white font-bold rounded-lg hover:shadow-[0_0_20px_rgba(113,18,175,0.5)] transition-all flex items-center justify-center gap-2 ${startingSimulatorId === simulator.id ? 'opacity-70 cursor-not-allowed' : ''}`}
+                                        >
+                                            {startingSimulatorId === simulator.id ? (
+                                                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                            ) : (
+                                                <PlayCircle size={20} />
+                                            )}
+                                            {startingSimulatorId === simulator.id ? 'جاري البدء...' : 'بدء المحاكاة'}
                                         </button>
+
+                                        {/* Progress Bar (if started) */}
+                                        {simulator.progress > 0 && (
+                                            <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/10 mt-4 rounded-b-xl overflow-hidden">
+                                                <div
+                                                    className="h-full bg-gradient-to-r from-purple-500 to-blue-500"
+                                                    style={{ width: `${Math.min(100, simulator.progress)}%` }}
+                                                ></div>
+                                            </div>
+                                        )}
                                     </div>
                                 </motion.div>
                             );
@@ -438,6 +477,6 @@ export default function SimulatorsHub() {
                     )}
                 </div>
             </div>
-        </div>
+        </div >
     );
 }

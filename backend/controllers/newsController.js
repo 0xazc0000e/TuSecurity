@@ -22,6 +22,29 @@ const getAllNews = (req, res) => {
     });
 };
 
+const getLatestUpdates = async (req, res) => {
+    const safeGet = (sql, params = []) => new Promise((resolve) => {
+        db.get(sql, params, (err, row) => {
+            if (err) { console.error('[getLatestUpdates] SQL error:', err.message); resolve(null); }
+            else resolve(row || null);
+        });
+    });
+
+    try {
+        const [latestEvent, latestSurvey, latestNews] = await Promise.all([
+            safeGet('SELECT id, title, description, category as type_tag, "event" as type, created_at FROM club_events ORDER BY created_at DESC LIMIT 1'),
+            safeGet('SELECT id, title, description, type as type_tag, "survey" as type, created_at FROM club_surveys ORDER BY created_at DESC LIMIT 1'),
+            safeGet('SELECT id, title, body as description, image_url as image, "news" as type, created_at FROM news ORDER BY created_at DESC LIMIT 1'),
+        ]);
+
+        const latestUpdates = [latestEvent, latestSurvey, latestNews].filter(Boolean);
+        res.json({ success: true, latest: latestUpdates });
+    } catch (error) {
+        console.error('Error fetching latest updates:', error);
+        res.status(500).json({ success: false, error: 'Failed to fetch latest club updates' });
+    }
+};
+
 const getNewsById = (req, res) => {
     const { id } = req.params;
     db.get('SELECT * FROM news WHERE id = ?', [id], (err, row) => {
@@ -88,6 +111,7 @@ const deleteNews = (req, res) => {
 
 module.exports = {
     getAllNews,
+    getLatestUpdates,
     getNewsById,
     createNews,
     updateNews,

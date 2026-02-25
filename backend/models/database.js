@@ -113,6 +113,7 @@ function initializeDatabase() {
                 xp_reward INTEGER DEFAULT 10,
                 video_url TEXT,
                 is_interactive BOOLEAN DEFAULT 0,
+                flag TEXT,                    -- The correct flag string for CTF-style lessons
                 sort_order INTEGER DEFAULT 0,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (unit_id) REFERENCES units(id) ON DELETE CASCADE
@@ -478,26 +479,6 @@ function initializeDatabase() {
                 FOREIGN KEY (member_id) REFERENCES distinguished_members(id)
             )`);
 
-            // Migration: add color column if missing
-            db.run(`ALTER TABLE distinguished_members ADD COLUMN color TEXT DEFAULT '#f59e0b'`, () => { });
-
-            // Migration: add link column to club_events if missing
-            db.run(`ALTER TABLE club_events ADD COLUMN link TEXT`, () => { });
-
-            // Migration: add image column to club_events if missing
-            db.run(`ALTER TABLE club_events ADD COLUMN image TEXT`, () => { });
-
-            // Migration: add email verification columns to users
-            db.run(`ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0`, () => { });
-            db.run(`ALTER TABLE users ADD COLUMN verification_code TEXT`, () => { });
-            db.run(`ALTER TABLE users ADD COLUMN verification_expires DATETIME`, () => { });
-            db.run(`ALTER TABLE users ADD COLUMN student_id TEXT`, () => { });
-            db.run(`ALTER TABLE users ADD COLUMN college TEXT`, () => { });
-
-            // Migration: add full_name and certificates columns
-            db.run(`ALTER TABLE users ADD COLUMN full_name TEXT`, () => { });
-            db.run(`ALTER TABLE users ADD COLUMN certificates TEXT`, () => { });
-
             // --- QUIZ RESULTS ---
             db.run(`CREATE TABLE IF NOT EXISTS quiz_results (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -506,24 +487,52 @@ function initializeDatabase() {
                 score INTEGER NOT NULL,
                 total_questions INTEGER NOT NULL,
                 passed BOOLEAN DEFAULT 0,
-                answers TEXT, -- JSON string of chosen options
+                answers TEXT,
                 attempt_number INTEGER DEFAULT 1,
                 completed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
                 FOREIGN KEY (lesson_id) REFERENCES lessons(id) ON DELETE CASCADE
             )`);
 
-            // Migration: add social_links and title columns
-            db.run(`ALTER TABLE users ADD COLUMN social_links TEXT DEFAULT '{}'`, () => { });
-            db.run(`ALTER TABLE users ADD COLUMN title TEXT`, () => { });
+            // ===== SCHEMA MIGRATIONS =====
+            // These run on every startup. ALTER TABLE errors (duplicate column) are silently ignored.
+            const migrations = [
+                // distinguished_members
+                `ALTER TABLE distinguished_members ADD COLUMN color TEXT DEFAULT '#f59e0b'`,
+                // club_events
+                `ALTER TABLE club_events ADD COLUMN link TEXT`,
+                `ALTER TABLE club_events ADD COLUMN image TEXT`,
+                // users — verification
+                `ALTER TABLE users ADD COLUMN email_verified INTEGER DEFAULT 0`,
+                `ALTER TABLE users ADD COLUMN verification_code TEXT`,
+                `ALTER TABLE users ADD COLUMN verification_expires DATETIME`,
+                `ALTER TABLE users ADD COLUMN student_id TEXT`,
+                `ALTER TABLE users ADD COLUMN college TEXT`,
+                `ALTER TABLE users ADD COLUMN full_name TEXT`,
+                `ALTER TABLE users ADD COLUMN certificates TEXT`,
+                // users — social & profile
+                `ALTER TABLE users ADD COLUMN social_links TEXT DEFAULT '{}'`,
+                `ALTER TABLE users ADD COLUMN title TEXT`,
+                `ALTER TABLE users ADD COLUMN department TEXT`,
+                `ALTER TABLE users ADD COLUMN specializations TEXT DEFAULT '[]'`,
+                `ALTER TABLE users ADD COLUMN streak_days INTEGER DEFAULT 0`,
+                // lessons
+                `ALTER TABLE lessons ADD COLUMN flag TEXT`,
+                // user_progress
+                `ALTER TABLE user_progress ADD COLUMN progress_percentage INTEGER DEFAULT 0`,
+            ];
 
-            // Migration: add department and specializations columns
-            db.run(`ALTER TABLE users ADD COLUMN department TEXT`, () => { });
-            db.run(`ALTER TABLE users ADD COLUMN specializations TEXT DEFAULT '[]'`, () => { });
+            migrations.forEach(sql => {
+                db.run(sql, () => { /* column may already exist — ignore error */ });
+            });
 
-            // Migration: add streak_days column
-            db.run(`ALTER TABLE users ADD COLUMN streak_days INTEGER DEFAULT 0`, () => { });
+            // ===== SEED DATA — Simulators =====
+            db.run(`INSERT OR IGNORE INTO simulators (id, title, type, difficulty, category, description, icon, xp_reward, lessons_count, status)
+                    VALUES (1, 'محاكي Bash الاحترافي', 'tool', 'beginner', 'أداة', 'تعلم أوامر Linux من الصفر حتى الاحتراف مع بيئة تفاعلية حقيقية', 'Terminal', 500, 32, 'active')`);
+            db.run(`INSERT OR IGNORE INTO simulators (id, title, type, difficulty, category, description, icon, xp_reward, lessons_count, status)
+                    VALUES (2, 'عملية الفهد الأسود', 'attack', 'intermediate', 'سيناريو هجوم', 'سيناريو اختراق كامل مع 5 مراحل: استطلاع، مسح، استغلال، ما بعد الاستغلال', 'Shield', 800, 5, 'active')`);
 
+            console.log('Migrations applied and seed data checked.');
             resolve();
         });
     });

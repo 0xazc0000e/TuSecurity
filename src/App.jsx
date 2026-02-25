@@ -1,7 +1,6 @@
 import React, { useEffect } from 'react';
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import Layout from './layouts/Layout';
-import Home from './pages/Home';
 import HomeNew from './pages/HomeNew';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
@@ -15,6 +14,7 @@ import AdminAdvanced from './pages/AdminAdvanced';
 import Profile from './pages/Profile';
 import ClubActivities from './pages/ClubActivities';
 import CompleteProfile from './pages/CompleteProfile';
+import NotFound from './pages/NotFound';
 import ProtectedRoute from './components/ProtectedRoute';
 import { AuthProvider } from './context/AuthContext';
 import { AnalyticsProvider } from './context/AnalyticsContext';
@@ -54,23 +54,32 @@ function AppContent() {
                     <Route
                         path="admin"
                         element={
-                            <ProtectedRoute requiredRole="editor">
+                            <ProtectedRoute requiredRole="admin">
                                 <AdminAdvanced />
                             </ProtectedRoute>
                         }
                     />
-                    <Route path="profile" element={<Profile />} />
+                    <Route
+                        path="profile"
+                        element={
+                            <ProtectedRoute>
+                                <Profile />
+                            </ProtectedRoute>
+                        }
+                    />
 
                     <Route path="activities" element={<ClubActivities />} />
                     <Route path="login" element={<Login />} />
-                    <Route path="/register" element={<Signup />} />
-                    <Route path="/forgot-password" element={<ForgotPassword />} />
-                    <Route path="/reset-password" element={<ResetPassword />} />
-                    <Route path="/onboarding" element={<CompleteProfile />} />
-                    <Route path="/complete-profile" element={<CompleteProfile />} />
+                    <Route path="register" element={<Signup />} />
+                    <Route path="forgot-password" element={<ForgotPassword />} />
+                    <Route path="reset-password" element={<ResetPassword />} />
+                    <Route path="onboarding" element={<CompleteProfile />} />
+                    <Route path="complete-profile" element={<CompleteProfile />} />
                     <Route path="simulators/*" element={<SimulatorsHub />} />
+                    <Route path="*" element={<NotFound />} />
                 </Route>
             </Routes>
         </>
     );
 }
+

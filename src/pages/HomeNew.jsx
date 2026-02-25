@@ -12,9 +12,9 @@ import { StatCounter } from '../components/ui/StatCounter';
 
 import { WhyDifferentSection } from '../components/home/WhyDifferentSection';
 import { SimulatorsPreviewSection } from '../components/home/SimulatorsPreviewSection';
-import { AttackScenariosPreviewSection } from '../components/home/AttackScenariosPreviewSection';
+import { KnowledgeBasePreviewSection } from '../components/home/AttackScenariosPreviewSection';
 import { LearningMethodologySection } from '../components/home/LearningMethodologySection';
-import { KnowledgeHubSection } from '../components/home/KnowledgeHubSection';
+import { ClubUpdatesSection } from '../components/home/KnowledgeHubSection';
 import { AboutClubSection } from '../components/home/AboutClubSection';
 import { CtaSection } from '../components/home/CtaSection';
 
@@ -53,35 +53,70 @@ export default function Home() {
 
             {/* Hero */}
             <section className="relative min-h-[90vh] flex flex-col items-center justify-center pt-12 overflow-hidden">
+                {/* Floating ambient particles */}
+                <motion.div animate={{ y: [-20, 20, -20], x: [-10, 10, -10] }} transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }} className="absolute top-1/4 left-1/4 w-2 h-2 bg-[#7112AF] rounded-full shadow-[0_0_10px_#7112AF]" />
+                <motion.div animate={{ y: [20, -20, 20], x: [10, -10, 10] }} transition={{ duration: 10, repeat: Infinity, ease: "easeInOut", delay: 1 }} className="absolute bottom-1/3 right-1/3 w-3 h-3 bg-[#ff006e] rounded-full shadow-[0_0_15px_#ff006e]" />
+                <motion.div animate={{ opacity: [0.2, 0.8, 0.2], scale: [1, 1.5, 1] }} transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }} className="absolute top-1/3 right-1/4 w-1 h-1 bg-white rounded-full shadow-[0_0_5px_white]" />
+
                 <div className="container mx-auto px-6 grid lg:grid-cols-2 gap-12 items-center relative z-10">
-                    <div className="text-center lg:text-right order-2 lg:order-1">
-                        <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#7112AF]/10 text-[#d4b3ff] border border-[#7112AF]/30 text-xs font-bold mb-8 backdrop-blur-md shadow-[0_0_15px_rgba(113,18,175,0.2)]">
+                    <motion.div
+                        initial={{ opacity: 0, x: 50 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ duration: 0.8, staggerChildren: 0.2 }}
+                        className="text-center lg:text-right order-2 lg:order-1"
+                    >
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.8 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ duration: 0.5 }}
+                            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-[#7112AF]/10 text-[#d4b3ff] border border-[#7112AF]/30 text-xs font-bold mb-8 backdrop-blur-md shadow-[0_0_15px_rgba(113,18,175,0.2)]"
+                        >
                             <span className="relative flex h-2 w-2">
                                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#7112AF] opacity-75"></span>
                                 <span className="relative inline-flex rounded-full h-2 w-2 bg-[#7112AF]"></span>
                             </span>
                             <TypewriterText text="البيئة التعليمية الآمنة..." />
-                        </div>
-                        <h1 className="text-3xl md:text-6xl font-black tracking-tight text-white mb-8 leading-[1.6]">
-                            التدريب السيبراني <br />
-                            <span className="text-transparent bg-clip-text bg-gradient-to-l from-[#7112AF] via-[#b66dff] to-[#7112AF] bg-[200%_auto] animate-gradient">الإدراكي</span>
-                        </h1>
-                        <p className="text-lg md:text-xl text-[#bbb6d1] mb-10 max-w-xl mx-auto lg:mx-0 leading-relaxed font-light">
-                            ليس مجرد كتابة أوامر. نحن نعلمك كيف تفكر الأنظمة، كيف تفشل، وكيف تحميها. بيئة محاكاة آمنة لبناء نماذج ذهنية صحيحة.
-                        </p>
-                        <div className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
-                            <button onClick={() => navigate('/simulators')} className="px-8 py-4 bg-gradient-to-r from-[#7112AF] to-[#ff006e] text-white hover:shadow-[0_0_30px_rgba(113,18,175,0.5)] rounded-xl font-bold transition-all flex items-center justify-center gap-2 hover:scale-105">
+                        </motion.div>
+                        <motion.h1
+                            initial={{ opacity: 0, y: 30 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.6, delay: 0.2 }}
+                            className="text-4xl md:text-6xl font-black tracking-tight text-white mb-8 leading-[1.6]"
+                        >
+                            ميدان <br />
+                            <span className="text-transparent bg-clip-text bg-gradient-to-l from-[#7112AF] via-[#b66dff] to-[#7112AF] bg-[200%_auto] animate-gradient">الوعي السيبراني</span>
+                        </motion.h1>
+                        <motion.p
+                            initial={{ opacity: 0, y: 30 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.6, delay: 0.3 }}
+                            className="text-lg md:text-xl text-[#bbb6d1] mb-10 max-w-xl mx-auto lg:mx-0 leading-relaxed font-light"
+                        >
+                            الاحتراف في مجال السايبر مو "نسخ ولصق".. هو وعي بالخطر قبل وقوعه. في منصتنا، نغوص معك في عمق الأنظمة؛ كيف تشتغل؟ وين تضعف؟ وكيف تحميها بذكاء؟ خض التجربة في بيئة محاكاة واقعية، وخلّك "الرقم الصعب" في الميدان.
+                        </motion.p>
+                        <motion.div
+                            initial={{ opacity: 0, y: 30 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.6, delay: 0.4 }}
+                            className="flex flex-col sm:flex-row gap-4 justify-center lg:justify-start"
+                        >
+                            <button onClick={() => navigate('/simulators')} className="px-8 py-4 bg-gradient-to-r from-[#7112AF] to-[#ff006e] text-white hover:shadow-[0_0_40px_rgba(113,18,175,0.6)] rounded-xl font-bold transition-all duration-300 flex items-center justify-center gap-2 hover:scale-105 hover:-translate-y-1">
                                 ابدأ التدريب الآن <Target size={20} />
                             </button>
-                            <button onClick={() => navigate('/about')} className="px-8 py-4 bg-white/5 text-white border border-white/20 hover:bg-white/10 rounded-xl font-bold transition-all flex items-center justify-center gap-2">
-                                من نحن <ArrowLeft size={18} />
+                            <button onClick={() => navigate('/about')} className="group px-8 py-4 bg-white/5 text-white border border-white/20 hover:bg-white/10 hover:border-white/40 rounded-xl font-bold transition-all duration-300 flex items-center justify-center gap-2">
+                                من نحن <ArrowLeft size={18} className="transition-transform group-hover:-translate-x-1" />
                             </button>
-                        </div>
-                    </div>
+                        </motion.div>
+                    </motion.div>
 
-                    <div className="order-1 lg:order-2 flex justify-center lg:justify-end relative">
+                    <motion.div
+                        initial={{ opacity: 0, x: -50, scale: 0.9 }}
+                        animate={{ opacity: 1, x: 0, scale: 1 }}
+                        transition={{ duration: 1, delay: 0.2 }}
+                        className="order-1 lg:order-2 flex justify-center lg:justify-end relative"
+                    >
                         <GlassTerminal />
-                    </div>
+                    </motion.div>
                 </div>
             </section>
 
@@ -131,23 +166,32 @@ export default function Home() {
             {/* Features Grid */}
             <section className="py-20 relative z-10">
                 <div className="container mx-auto px-6">
-                    <div className="text-center mb-16">
-                        <h2 className="text-3xl md:text-5xl font-bold text-white mb-4">
+                    <motion.div
+                        initial={{ opacity: 0, y: -20 }}
+                        whileInView={{ opacity: 1, y: 0 }}
+                        viewport={{ once: true, margin: "-100px" }}
+                        className="text-center mb-16"
+                    >
+                        <h2 className="text-4xl md:text-5xl font-black text-white mb-6">
                             لماذا نحن <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#7112AF] to-[#ff006e]">مختلفون</span>
                         </h2>
-                        <p className="text-gray-400 text-lg max-w-2xl mx-auto">
+                        <p className="text-gray-400 text-lg max-w-2xl mx-auto font-medium">
                             نحن لا نعلم فقط الأوامر، نحن نبني عقولاً قادرة على التفكير الأمني الحقيقي
                         </p>
-                    </div>
+                    </motion.div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                         <motion.div
-                            whileHover={{ scale: 1.05 }}
-                            className="group relative bg-gradient-to-br from-[#7112AF]/10 to-[#ff006e]/10 border border-[#7112AF]/30 rounded-2xl p-8 hover:shadow-[0_0_40px_rgba(113,18,175,0.3)] transition-all duration-300"
+                            initial={{ opacity: 0, y: 30 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true, margin: "-50px" }}
+                            transition={{ duration: 0.5, delay: 0.1 }}
+                            whileHover={{ scale: 1.03, y: -5 }}
+                            className="group relative bg-gradient-to-br from-[#7112AF]/10 to-[#ff006e]/10 border border-[#7112AF]/30 rounded-2xl p-8 hover:shadow-[0_10px_40px_rgba(113,18,175,0.4)] transition-all duration-300"
                         >
-                            <div className="absolute top-0 right-0 w-32 h-32 bg-[#7112AF]/20 rounded-full blur-2xl" />
+                            <div className="absolute top-0 right-0 w-32 h-32 bg-[#7112AF]/20 rounded-full blur-2xl group-hover:bg-[#7112AF]/40 transition-colors duration-500" />
                             <div className="relative z-10">
-                                <div className="w-16 h-16 bg-gradient-to-br from-[#7112AF] to-[#ff006e] rounded-xl flex items-center justify-center mb-6">
+                                <div className="w-16 h-16 bg-gradient-to-br from-[#7112AF] to-[#ff006e] rounded-xl flex items-center justify-center mb-6 shadow-[0_0_15px_rgba(113,18,175,0.5)] group-hover:scale-110 transition-transform duration-300">
                                     <Brain className="text-white" size={32} />
                                 </div>
                                 <h3 className="text-xl font-bold text-white mb-4">التفكير الأمني</h3>
@@ -158,12 +202,16 @@ export default function Home() {
                         </motion.div>
 
                         <motion.div
-                            whileHover={{ scale: 1.05 }}
-                            className="group relative bg-gradient-to-br from-[#ff006e]/10 to-[#7112AF]/10 border border-[#ff006e]/30 rounded-2xl p-8 hover:shadow-[0_0_40px_rgba(255,0,110,0.3)] transition-all duration-300"
+                            initial={{ opacity: 0, y: 30 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true, margin: "-50px" }}
+                            transition={{ duration: 0.5, delay: 0.2 }}
+                            whileHover={{ scale: 1.03, y: -5 }}
+                            className="group relative bg-gradient-to-br from-[#ff006e]/10 to-[#7112AF]/10 border border-[#ff006e]/30 rounded-2xl p-8 hover:shadow-[0_10px_40px_rgba(255,0,110,0.4)] transition-all duration-300"
                         >
-                            <div className="absolute top-0 left-0 w-32 h-32 bg-[#ff006e]/20 rounded-full blur-2xl" />
+                            <div className="absolute top-0 left-0 w-32 h-32 bg-[#ff006e]/20 rounded-full blur-2xl group-hover:bg-[#ff006e]/40 transition-colors duration-500" />
                             <div className="relative z-10">
-                                <div className="w-16 h-16 bg-gradient-to-br from-[#ff006e] to-[#7112AF] rounded-xl flex items-center justify-center mb-6">
+                                <div className="w-16 h-16 bg-gradient-to-br from-[#ff006e] to-[#7112AF] rounded-xl flex items-center justify-center mb-6 shadow-[0_0_15px_rgba(255,0,110,0.5)] group-hover:scale-110 transition-transform duration-300">
                                     <Radio className="text-white" size={32} />
                                 </div>
                                 <h3 className="text-xl font-bold text-white mb-4">سيناريوهات واقعية</h3>
@@ -174,12 +222,16 @@ export default function Home() {
                         </motion.div>
 
                         <motion.div
-                            whileHover={{ scale: 1.05 }}
-                            className="group relative bg-gradient-to-br from-green-500/10 to-blue-500/10 border border-green-500/30 rounded-2xl p-8 hover:shadow-[0_0_40px_rgba(34,197,94,0.3)] transition-all duration-300"
+                            initial={{ opacity: 0, y: 30 }}
+                            whileInView={{ opacity: 1, y: 0 }}
+                            viewport={{ once: true, margin: "-50px" }}
+                            transition={{ duration: 0.5, delay: 0.3 }}
+                            whileHover={{ scale: 1.03, y: -5 }}
+                            className="group relative bg-gradient-to-br from-green-500/10 to-blue-500/10 border border-green-500/30 rounded-2xl p-8 hover:shadow-[0_10px_40px_rgba(34,197,94,0.3)] transition-all duration-300"
                         >
-                            <div className="absolute bottom-0 right-0 w-32 h-32 bg-green-500/20 rounded-full blur-2xl" />
+                            <div className="absolute bottom-0 right-0 w-32 h-32 bg-green-500/20 rounded-full blur-2xl group-hover:bg-green-500/40 transition-colors duration-500" />
                             <div className="relative z-10">
-                                <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-blue-500 rounded-xl flex items-center justify-center mb-6">
+                                <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-blue-500 rounded-xl flex items-center justify-center mb-6 shadow-[0_0_15px_rgba(34,197,94,0.5)] group-hover:scale-110 transition-transform duration-300">
                                     <Shield className="text-white" size={32} />
                                 </div>
                                 <h3 className="text-xl font-bold text-white mb-4">بيئة آمنة</h3>
@@ -296,9 +348,9 @@ export default function Home() {
 
             {/* Keep existing sections */}
             <SimulatorsPreviewSection />
-            <AttackScenariosPreviewSection />
+            <KnowledgeBasePreviewSection />
             <LearningMethodologySection />
-            <KnowledgeHubSection />
+            <ClubUpdatesSection />
             <AboutClubSection />
             <CtaSection />
         </>

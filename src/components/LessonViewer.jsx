@@ -12,10 +12,12 @@ import {
     Award, ChevronRight, ChevronDown, Lock, AlertCircle as AlertIcon,
     Sparkles, BookOpen, Brain, Zap, Trophy, RotateCcw, ArrowRight,
     Clock, GraduationCap, Target, Copy, Check, Play,
-    Menu, X, ChevronLeft, Layers
+    Menu, X, ChevronLeft, Layers, Flag
 } from 'lucide-react';
 import mermaid from 'mermaid';
-import { apiCall } from '../context/AuthContext';
+import { useAuth } from '../context/AuthContext';
+import { lmsAPI } from '../services/api';
+import { getApiImageUrl } from '../utils/imageUtils';
 
 mermaid.initialize({ startOnLoad: false, theme: 'dark', securityLevel: 'loose' });
 
@@ -286,6 +288,88 @@ function QuizBlock({ config, onSubmit }) {
 }
 
 /* ═══════════════════════════════════════════════════════════
+   FLAG BLOCK (CTF)
+   ═══════════════════════════════════════════════════════════ */
+function FlagBlock({ onSubmit, disabled }) {
+    const [flagInput, setFlagInput] = useState('');
+    const [status, setStatus] = useState('idle'); // idle, loading, success, error
+    const [errorMsg, setErrorMsg] = useState('');
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        if (!flagInput.trim() || disabled) return;
+
+        setStatus('loading');
+        setErrorMsg('');
+
+        try {
+            const result = await onSubmit(flagInput.trim());
+            if (result.success) {
+                setStatus('success');
+            } else {
+                setStatus('error');
+                setErrorMsg(result.error || 'Incorrect Flag!');
+                setTimeout(() => setStatus('idle'), 3000);
+            }
+        } catch (err) {
+            setStatus('error');
+            setErrorMsg(err.message || 'Error verifying flag');
+            setTimeout(() => setStatus('idle'), 3000);
+        }
+    };
+
+    return (
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
+            className="bg-[#12122a] border border-red-500/20 rounded-2xl overflow-hidden my-8" dir="rtl">
+            <div className="px-5 py-4 bg-gradient-to-l from-red-600/10 to-pink-600/10 border-b border-red-500/20 flex items-center gap-3">
+                <div className="w-10 h-10 bg-red-500/20 rounded-xl flex items-center justify-center">
+                    <Flag size={20} className="text-red-400" />
+                </div>
+                <div>
+                    <h3 className="text-sm font-bold text-red-400">تحدي العلم (CTF)</h3>
+                    <p className="text-xs text-gray-500">أدخل العلم لإكمال هذا الدرس</p>
+                </div>
+            </div>
+            <div className="p-5">
+                <form onSubmit={handleSubmit} className="flex gap-3">
+                    <input
+                        type="text"
+                        placeholder="TU{flag_goes_here}"
+                        value={flagInput}
+                        onChange={(e) => setFlagInput(e.target.value)}
+                        disabled={disabled || status === 'loading' || status === 'success'}
+                        className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-red-500/50 focus:bg-white/10 transition-all font-mono"
+                        dir="ltr"
+                    />
+                    <button
+                        type="submit"
+                        disabled={!flagInput.trim() || disabled || status === 'loading' || status === 'success'}
+                        className={`px-6 py-3 rounded-xl font-bold text-sm transition-all flex items-center justify-center min-w-[100px] ${status === 'success' ? 'bg-green-500 text-white' :
+                            status === 'error' ? 'bg-red-500 text-white' :
+                                'bg-gradient-to-l from-red-600 to-pink-600 text-white hover:shadow-[0_0_20px_rgba(239,68,68,0.3)] disabled:opacity-50 disabled:hover:shadow-none'
+                            }`}
+                    >
+                        {status === 'loading' ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> :
+                            status === 'success' ? <CheckCircle size={18} /> :
+                                status === 'error' ? <AlertTriangle size={18} /> : 'إرسال'}
+                    </button>
+                </form>
+                {status === 'error' && (
+                    <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-red-400 text-xs mt-3 flex items-center gap-1">
+                        <AlertIcon size={12} /> {errorMsg}
+                    </motion.p>
+                )}
+                {status === 'success' && (
+                    <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-green-400 text-xs mt-3 flex items-center gap-1 font-bold">
+                        <Check size={12} /> تم التحقق بنجاح!
+                    </motion.p>
+                )}
+            </div>
+        </motion.div>
+    );
+}
+
+/* ═══════════════════════════════════════════════════════════
    SIDEBAR — Units & Lessons navigation
    ═══════════════════════════════════════════════════════════ */
 function Sidebar({ course, currentLessonId, completedLessons, onSelectLesson, onBack, open, onToggle }) {
@@ -385,6 +469,7 @@ function Sidebar({ course, currentLessonId, completedLessons, onSelectLesson, on
 function LessonViewer({ lesson, onComplete, onBack, course, onSelectLesson, completedLessons = [] }) {
     const [termPassed, setTermPassed] = useState(false);
     const [quizPassed, setQuizPassed] = useState(false);
+    const [flagPassed, setFlagPassed] = useState(false);
     const [completed, setCompleted] = useState(false);
     const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -392,6 +477,7 @@ function LessonViewer({ lesson, onComplete, onBack, course, onSelectLesson, comp
     useEffect(() => {
         setTermPassed(false);
         setQuizPassed(false);
+        setFlagPassed(false);
         setCompleted(false);
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }, [lesson?.id]);
@@ -409,16 +495,25 @@ function LessonViewer({ lesson, onComplete, onBack, course, onSelectLesson, comp
 
     const hasQuiz = Array.isArray(quizConfig) && quizConfig.length > 0;
     const hasTerm = termConfig && typeof termConfig === 'object' && Array.isArray(termConfig.commands) && termConfig.commands.length > 0;
-    const canComplete = (!hasQuiz || quizPassed) && (!hasTerm || termPassed);
+    const hasFlag = !!lesson?.flag;
+
+    // Auto-pass if already completed before
+    useEffect(() => {
+        if (completedLessons.includes(lesson?.id)) {
+            setCompleted(true);
+            setTermPassed(hasTerm);
+            setQuizPassed(hasQuiz);
+            setFlagPassed(hasFlag);
+        }
+    }, [completedLessons, lesson?.id, hasTerm, hasQuiz, hasFlag]);
+
+    const canComplete = (!hasQuiz || quizPassed) && (!hasTerm || termPassed) && (!hasFlag || flagPassed);
 
     const handleQuizSubmit = async (result) => {
         try {
-            await apiCall('/lms/quiz/submit', {
-                method: 'POST',
-                body: JSON.stringify({
-                    lesson_id: lesson.id,
-                    ...result
-                })
+            await lmsAPI.submitQuiz({
+                lesson_id: lesson.id,
+                ...result
             });
 
             if (result.passed) {
@@ -427,6 +522,24 @@ function LessonViewer({ lesson, onComplete, onBack, course, onSelectLesson, comp
             }
         } catch (error) {
             console.error("Quiz submission failed", error);
+        }
+    };
+
+    const handleFlagSubmit = async (flagValue) => {
+        try {
+            const result = await lmsAPI.submitFlag({
+                lesson_id: lesson.id,
+                flag: flagValue
+            });
+
+            if (result.success) {
+                setFlagPassed(true);
+                try { import('canvas-confetti').then(m => m.default({ particleCount: 150, spread: 80, origin: { y: 0.6 } })); } catch { }
+            }
+            return result;
+        } catch (error) {
+            console.error("Flag submission failed", error);
+            return { success: false, error: error.message };
         }
     };
 
@@ -475,7 +588,7 @@ function LessonViewer({ lesson, onComplete, onBack, course, onSelectLesson, comp
             );
         },
         img({ src, alt }) {
-            const finalSrc = src?.startsWith('http') ? src : `http://localhost:5000${src}`;
+            const finalSrc = getApiImageUrl(src);
             return (
                 <div className="my-8 relative group">
                     <div className="relative rounded-2xl overflow-hidden border border-white/10 shadow-2xl bg-[#0a0a14]">
@@ -622,6 +735,11 @@ function LessonViewer({ lesson, onComplete, onBack, course, onSelectLesson, comp
                                                 <Terminal size={13} /> تطبيق عملي
                                             </span>
                                         )}
+                                        {hasFlag && (
+                                            <span className="flex items-center gap-2 bg-red-500/8 border border-red-500/15 px-4 py-2 rounded-xl text-red-400">
+                                                <Flag size={13} /> تحدي العلم
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -678,9 +796,16 @@ function LessonViewer({ lesson, onComplete, onBack, course, onSelectLesson, comp
                             </div>
                         )}
 
+                        {/* Flag Submission */}
+                        {hasFlag && (
+                            <div className="mt-8">
+                                <FlagBlock onSubmit={handleFlagSubmit} disabled={flagPassed || completed} />
+                            </div>
+                        )}
+
                         {/* Completion */}
                         <div className="mt-12 text-center">
-                            {(hasQuiz || hasTerm) && !completed && (
+                            {(hasQuiz || hasTerm || hasFlag) && !completed && (
                                 <div className="bg-[#12122a] border border-white/5 rounded-2xl p-5 mb-6 max-w-sm mx-auto">
                                     <h4 className="text-sm font-bold text-white mb-3 flex items-center justify-center gap-2"><Target size={14} className="text-purple-400" /> المتطلبات</h4>
                                     <div className="space-y-2">
@@ -692,6 +817,11 @@ function LessonViewer({ lesson, onComplete, onBack, course, onSelectLesson, comp
                                         {hasQuiz && (
                                             <div className={`flex items-center gap-2 text-sm ${quizPassed ? 'text-green-400' : 'text-gray-500'}`}>
                                                 {quizPassed ? <CheckCircle size={14} /> : <div className="w-3.5 h-3.5 rounded-full border-2 border-gray-600" />} الاختبار
+                                            </div>
+                                        )}
+                                        {hasFlag && (
+                                            <div className={`flex items-center gap-2 text-sm ${flagPassed ? 'text-green-400' : 'text-gray-500'}`}>
+                                                {flagPassed ? <CheckCircle size={14} /> : <div className="w-3.5 h-3.5 rounded-full border-2 border-gray-600" />} التقاط العلم
                                             </div>
                                         )}
                                     </div>

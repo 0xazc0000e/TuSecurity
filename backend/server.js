@@ -4,6 +4,7 @@ const path = require('path');
 const fs = require('fs');
 const rateLimit = require('express-rate-limit');
 const helmet = require('helmet');
+const cookieParser = require('cookie-parser');
 require('dotenv').config();
 
 const { initializeDatabase, seedDatabase } = require('./models/database');
@@ -22,15 +23,21 @@ const interactionRoutes = require('./routes/interactionRoutes');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Environment-aware origins
+const isDev = process.env.NODE_ENV !== 'production';
+const devOrigins = isDev ? ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:3000'] : [];
+
 // Security middleware - Helmet
 app.use(helmet({
     contentSecurityPolicy: {
         directives: {
             defaultSrc: ["'self'"],
-            styleSrc: ["'self'", "'unsafe-inline'"],
-            scriptSrc: ["'self'"],
+            styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+            fontSrc: ["'self'", "https://fonts.gstatic.com"],
+            scriptSrc: ["'self'", "'unsafe-eval'"], // unsafe-eval needed for some React dev tools/hmr
             imgSrc: ["'self'", "data:", "http:", "https:"],
-            connectSrc: ["'self'", "http://localhost:5173"],
+            connectSrc: ["'self'", ...devOrigins, process.env.FRONTEND_URL].filter(Boolean),
+            frameAncestors: ["'none'"], // Prevent clickjacking
         },
     },
     crossOriginResourcePolicy: { policy: "cross-origin" },
@@ -38,8 +45,7 @@ app.use(helmet({
 
 // CORS middleware - Restricted to known origins
 const allowedOrigins = [
-    'http://localhost:5173',
-    'http://localhost:3000',
+    ...devOrigins,
     process.env.FRONTEND_URL
 ].filter(Boolean);
 
@@ -47,7 +53,7 @@ app.use(cors({
     origin: function (origin, callback) {
         // Allow requests with no origin (like mobile apps or curl requests)
         if (!origin) return callback(null, true);
-        if (allowedOrigins.indexOf(origin) !== -1 || origin.endsWith('.vercel.app')) {
+        if (allowedOrigins.indexOf(origin) !== -1) {
             callback(null, true);
         } else {
             console.warn(`CORS blocked origin: ${origin}`);
@@ -59,10 +65,10 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
-// Rate limiting for general API
+// Rate Limiting (in-memory, no Redis dependency required)
 const generalLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 1000, // limit each IP to 1000 requests per windowMs
+    max: 1000,
     standardHeaders: true,
     legacyHeaders: false,
     message: {
@@ -73,18 +79,19 @@ app.use(generalLimiter);
 
 // Strict rate limiting for auth endpoints
 const authLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes window
-    max: 100, // start blocking after 100 requests (relaxed from 50 hard limit)
+    windowMs: 15 * 60 * 1000,
+    max: 100,
     standardHeaders: true,
     legacyHeaders: false,
-    skipSuccessfulRequests: true, // Don't count successful logins
+    skipSuccessfulRequests: true,
     message: {
         error: 'تم تجاوز عدد محاولات تسجيل الدخول المسموحة. الرجاء المحاولة بعد ساعة.'
     }
 });
 
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(cookieParser());
 
 // Initialize Passport
 const passport = require('./config/socialAuth');
@@ -147,7 +154,7 @@ const dashboardRoutes = require('./routes/dashboardRoutes');
 app.use('/api/dashboard', dashboardRoutes);
 
 // User Routes (XP Stats, Learning Progress, Profile Data)
-const userRoutes = require('./routes/userRoutes-real');
+const userRoutes = require('./routes/userRoutes');
 app.use('/api/user', userRoutes);
 
 // Profile Routes (Comprehensive, for Profile.jsx)
@@ -155,7 +162,7 @@ const profileRoutes = require('./routes/profileRoutes');
 app.use('/api/profile', profileRoutes);
 
 // Saved Items Routes (Bookmarks, Likes, Reading List, Folders)
-const savedItemsRoutes = require('./routes/savedItemsRoutes-real');
+const savedItemsRoutes = require('./routes/savedItemsRoutes');
 app.use('/api/user/saved', savedItemsRoutes);
 
 // Notification Routes
@@ -243,11 +250,27 @@ app.get('/api', (req, res) => {
     });
 });
 
-// 404 Handler
-app.use((req, res) => {
-    console.log(`404 Not Found: ${req.method} ${req.path}`);
-    res.status(404).json({ error: 'Endpoint not found' });
-});
+// Serve Frontend in Production
+if (process.env.NODE_ENV === 'production') {
+    const frontendDist = path.join(__dirname, '..', 'dist');
+    app.use(express.static(frontendDist));
+
+    // Catch-all route to serve React app
+    app.get('*', (req, res) => {
+        // Prevent API 404s from returning index.html
+        if (req.path.startsWith('/api/') || req.path.startsWith('/uploads/')) {
+            res.status(404).json({ error: 'Endpoint not found' });
+        } else {
+            res.sendFile(path.join(frontendDist, 'index.html'));
+        }
+    });
+} else {
+    // 404 Handler for Development
+    app.use((req, res) => {
+        console.log(`404 Not Found: ${req.method} ${req.path}`);
+        res.status(404).json({ error: 'Endpoint not found' });
+    });
+}
 
 // Error Handler
 app.use((err, req, res, next) => {

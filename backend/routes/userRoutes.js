@@ -1,13 +1,14 @@
 const express = require('express');
-const { authenticate } = require('../controllers/authController');
+const { requireAuth } = require('../middleware/rbacMiddleware');
 const { db } = require('../models/database');
+const { updateStreak, getStreak, awardStreakBonus } = require('../services/streakService');
 
 const router = express.Router();
 
 // Get comprehensive XP stats from all sources
-router.get('/xp-stats', authenticate, async (req, res) => {
+router.get('/xp-stats', requireAuth, async (req, res) => {
     try {
-        const userId = req.user.id;
+        const userId = req.userId;
 
         // Get total XP from user table
         const user = await new Promise((resolve, reject) => {
@@ -20,7 +21,7 @@ router.get('/xp-stats', authenticate, async (req, res) => {
         // Get weekly XP (last 7 days)
         const weeklyXP = await new Promise((resolve, reject) => {
             db.get(`
-                SELECT SUM(xp_amount) as total FROM xp_transactions 
+                SELECT COALESCE(SUM(xp_amount), 0) as total FROM xp_transactions 
                 WHERE user_id = ? AND created_at >= datetime('now', '-7 days')
             `, [userId], (err, row) => {
                 if (err) reject(err);
@@ -31,7 +32,7 @@ router.get('/xp-stats', authenticate, async (req, res) => {
         // Get monthly XP (last 30 days)
         const monthlyXP = await new Promise((resolve, reject) => {
             db.get(`
-                SELECT SUM(xp_amount) as total FROM xp_transactions 
+                SELECT COALESCE(SUM(xp_amount), 0) as total FROM xp_transactions 
                 WHERE user_id = ? AND created_at >= datetime('now', '-30 days')
             `, [userId], (err, row) => {
                 if (err) reject(err);
@@ -42,7 +43,7 @@ router.get('/xp-stats', authenticate, async (req, res) => {
         // Get XP breakdown by source
         const xpBySource = await new Promise((resolve, reject) => {
             db.all(`
-                SELECT source, SUM(xp_amount) as total 
+                SELECT source, COALESCE(SUM(xp_amount), 0) as total 
                 FROM xp_transactions 
                 WHERE user_id = ? 
                 GROUP BY source
@@ -57,7 +58,7 @@ router.get('/xp-stats', authenticate, async (req, res) => {
                         streakBonus: 0,
                         articleRead: 0
                     };
-                    rows.forEach(row => {
+                    rows?.forEach(row => {
                         if (sources.hasOwnProperty(row.source)) {
                             sources[row.source] = row.total;
                         }
@@ -100,12 +101,11 @@ router.get('/xp-stats', authenticate, async (req, res) => {
     }
 });
 
-// Get detailed XP breakdown
-router.get('/xp-detailed-stats', authenticate, async (req, res) => {
+// Get detailed XP stats
+router.get('/xp-detailed-stats', requireAuth, async (req, res) => {
     try {
-        const userId = req.user.id;
+        const userId = req.userId;
 
-        // Get user total XP
         const user = await new Promise((resolve, reject) => {
             db.get('SELECT total_xp FROM users WHERE id = ?', [userId], (err, row) => {
                 if (err) reject(err);
@@ -115,24 +115,41 @@ router.get('/xp-detailed-stats', authenticate, async (req, res) => {
 
         const totalXP = user.total_xp || 0;
 
-        // Calculate breakdown percentages
-        // This is a simplified version - in production you'd track actual sources
-        const sources = {
-            lessons: Math.floor(totalXP * 0.40),      // 40% from lessons
-            simulators: Math.floor(totalXP * 0.30),   // 30% from simulators
-            quizzes: Math.floor(totalXP * 0.15),      // 15% from quizzes
-            dailyLogin: Math.floor(totalXP * 0.10),   // 10% from daily login
-            streakBonus: Math.floor(totalXP * 0.05)   // 5% from streak bonus
-        };
+        // Get XP by source
+        const sources = await new Promise((resolve, reject) => {
+            db.all(`
+                SELECT source, COALESCE(SUM(xp_amount), 0) as total 
+                FROM xp_transactions 
+                WHERE user_id = ? 
+                GROUP BY source
+            `, [userId], (err, rows) => {
+                if (err) reject(err);
+                else {
+                    const result = {
+                        lessons: 0,
+                        simulators: 0,
+                        quizzes: 0,
+                        dailyLogin: 0,
+                        streakBonus: 0
+                    };
+                    rows?.forEach(row => {
+                        if (result.hasOwnProperty(row.source)) {
+                            result[row.source] = row.total;
+                        }
+                    });
+                    resolve(result);
+                }
+            });
+        });
 
-        // Get weekly and monthly XP from transactions
+        // Calculate percentages
         const weeklyXP = await new Promise((resolve, reject) => {
             db.get(`
                 SELECT COALESCE(SUM(xp_amount), 0) as total FROM xp_transactions 
                 WHERE user_id = ? AND created_at >= datetime('now', '-7 days')
             `, [userId], (err, row) => {
                 if (err) reject(err);
-                else resolve(row.total);
+                else resolve(row?.total || 0);
             });
         });
 
@@ -142,14 +159,15 @@ router.get('/xp-detailed-stats', authenticate, async (req, res) => {
                 WHERE user_id = ? AND created_at >= datetime('now', '-30 days')
             `, [userId], (err, row) => {
                 if (err) reject(err);
-                else resolve(row.total);
+                else resolve(row?.total || 0);
             });
         });
 
-        // Get recent activity with more details
+        // Get recent activity
         const recentActivity = await new Promise((resolve, reject) => {
             db.all(`
-                SELECT xt.*, COALESCE(l.title, s.title, 'نشاط') as item_title
+                SELECT xt.*, 
+                    COALESCE(l.title, s.title, 'نشاط') as item_title
                 FROM xp_transactions xt
                 LEFT JOIN lessons l ON xt.source = 'lessons' AND xt.reference_id = l.id
                 LEFT JOIN simulators s ON xt.source = 'simulators' AND xt.reference_id = s.id
@@ -183,22 +201,17 @@ router.get('/xp-detailed-stats', authenticate, async (req, res) => {
 });
 
 // Get learning progress
-router.get('/learning-progress', authenticate, async (req, res) => {
+router.get('/learning-progress', requireAuth, async (req, res) => {
     try {
-        const userId = req.user.id;
+        const userId = req.userId;
 
-        // Get enrolled tracks with progress
+        // Get enrolled tracks
         const enrolledTracks = await new Promise((resolve, reject) => {
             db.all(`
-                SELECT 
-                    t.*,
-                    ue.progress,
-                    ue.last_accessed,
-                    ue.is_completed,
-                    ue.current_lesson_id
+                SELECT t.*, ue.progress, ue.last_accessed, ue.is_completed
                 FROM user_enrollments ue
-                JOIN tracks t ON ue.track_id = t.id
-                WHERE ue.user_id = ? AND ue.item_type = 'track'
+                JOIN tracks t ON ue.item_id = t.id
+                WHERE ue.user_id = ? AND ue.type = 'track'
             `, [userId], (err, rows) => {
                 if (err) reject(err);
                 else resolve(rows || []);
@@ -208,20 +221,15 @@ router.get('/learning-progress', authenticate, async (req, res) => {
         // Get completed lessons
         const completedLessons = await new Promise((resolve, reject) => {
             db.all(`
-                SELECT 
-                    lp.*,
-                    l.title as lesson_title,
-                    l.duration,
-                    l.xp_reward,
-                    u.title as unit_title,
-                    c.title as course_title,
-                    t.title as track_title
+                SELECT lp.*, l.title as lesson_title, l.xp_reward,
+                    u.title as unit_title, c.title as course_title, t.title as track_title
                 FROM lesson_progress lp
                 JOIN lessons l ON lp.lesson_id = l.id
                 JOIN units u ON l.unit_id = u.id
                 JOIN courses c ON u.course_id = c.id
                 JOIN tracks t ON c.track_id = t.id
                 WHERE lp.user_id = ? AND lp.is_completed = 1
+                ORDER BY lp.completed_at DESC
             `, [userId], (err, rows) => {
                 if (err) reject(err);
                 else resolve(rows || []);
@@ -231,20 +239,15 @@ router.get('/learning-progress', authenticate, async (req, res) => {
         // Get in-progress lessons
         const inProgressLessons = await new Promise((resolve, reject) => {
             db.all(`
-                SELECT 
-                    lp.*,
-                    l.title as lesson_title,
-                    l.duration,
-                    l.xp_reward,
-                    u.title as unit_title,
-                    c.title as course_title,
-                    t.title as track_title
+                SELECT lp.*, l.title as lesson_title,
+                    u.title as unit_title, c.title as course_title, t.title as track_title
                 FROM lesson_progress lp
                 JOIN lessons l ON lp.lesson_id = l.id
                 JOIN units u ON l.unit_id = u.id
                 JOIN courses c ON u.course_id = c.id
                 JOIN tracks t ON c.track_id = t.id
                 WHERE lp.user_id = ? AND lp.is_completed = 0 AND lp.progress > 0
+                ORDER BY lp.last_accessed DESC
             `, [userId], (err, rows) => {
                 if (err) reject(err);
                 else resolve(rows || []);
@@ -274,16 +277,28 @@ router.get('/learning-progress', authenticate, async (req, res) => {
         });
 
         // Calculate overall progress
-        const totalLessons = completedLessons.length + inProgressLessons.length;
-        const overallProgress = totalLessons > 0 
-            ? Math.round((completedLessons.length / totalLessons) * 100)
-            : 0;
+        const totalLessonsQuery = await new Promise((resolve, reject) => {
+            db.get(`
+                SELECT COUNT(*) as total FROM lessons
+            `, [], (err, row) => {
+                if (err) reject(err);
+                else resolve(row?.total || 0);
+            });
+        });
+
+        const totalLessons = totalLessonsQuery || 1;
+        const overallProgress = Math.round((completedLessons.length / totalLessons) * 100);
 
         res.json({
             success: true,
             enrolledTracks: enrolledTracks.map(track => ({
-                ...track,
-                courses: [] // Would be populated with actual course data
+                id: track.id,
+                title: track.title,
+                description: track.description,
+                icon: track.icon,
+                progress: track.progress || 0,
+                is_completed: track.is_completed || 0,
+                last_accessed: track.last_accessed
             })),
             completedLessons: completedLessons.map(lesson => ({
                 id: lesson.lesson_id,
@@ -314,12 +329,11 @@ router.get('/learning-progress', authenticate, async (req, res) => {
     }
 });
 
-// Get learning statistics
-router.get('/learning-stats', authenticate, async (req, res) => {
+// Get learning stats
+router.get('/learning-stats', requireAuth, async (req, res) => {
     try {
-        const userId = req.user.id;
+        const userId = req.userId;
 
-        // Get count of completed lessons
         const completedLessons = await new Promise((resolve, reject) => {
             db.get(`
                 SELECT COUNT(*) as count FROM lesson_progress 
@@ -330,18 +344,16 @@ router.get('/learning-stats', authenticate, async (req, res) => {
             });
         });
 
-        // Get count of completed tracks
         const completedTracks = await new Promise((resolve, reject) => {
             db.get(`
                 SELECT COUNT(*) as count FROM user_enrollments 
-                WHERE user_id = ? AND item_type = 'track' AND is_completed = 1
+                WHERE user_id = ? AND type = 'track' AND is_completed = 1
             `, [userId], (err, row) => {
                 if (err) reject(err);
                 else resolve(row?.count || 0);
             });
         });
 
-        // Get in-progress lessons count
         const inProgressLessons = await new Promise((resolve, reject) => {
             db.get(`
                 SELECT COUNT(*) as count FROM lesson_progress 
@@ -352,7 +364,6 @@ router.get('/learning-stats', authenticate, async (req, res) => {
             });
         });
 
-        // Get total learning time
         const totalLearningTime = await new Promise((resolve, reject) => {
             db.get(`
                 SELECT COALESCE(SUM(time_spent), 0) as total FROM lesson_progress 
@@ -376,13 +387,12 @@ router.get('/learning-stats', authenticate, async (req, res) => {
     }
 });
 
-// Record lesson access (for progress tracking)
-router.post('/lesson-access', authenticate, async (req, res) => {
+// Record lesson access
+router.post('/lesson-access', requireAuth, async (req, res) => {
     try {
-        const userId = req.user.id;
+        const userId = req.userId;
         const { lessonId, action } = req.body;
 
-        // Update or insert lesson progress
         await new Promise((resolve, reject) => {
             db.run(`
                 INSERT INTO lesson_progress (user_id, lesson_id, progress, last_accessed, updated_at)
@@ -396,9 +406,6 @@ router.post('/lesson-access', authenticate, async (req, res) => {
             });
         });
 
-        // Update user streak
-        await updateUserStreak(userId);
-
         res.json({ success: true, message: 'Lesson access recorded' });
     } catch (error) {
         console.error('Error recording lesson access:', error);
@@ -407,18 +414,20 @@ router.post('/lesson-access', authenticate, async (req, res) => {
 });
 
 // Complete lesson and award XP
-router.post('/complete-lesson', authenticate, async (req, res) => {
+router.post('/complete-lesson', requireAuth, async (req, res) => {
     try {
-        const userId = req.user.id;
+        const userId = req.userId;
         const { lessonId } = req.body;
 
-        // Get lesson details for XP
+        // Get lesson XP reward
         const lesson = await new Promise((resolve, reject) => {
-            db.get('SELECT xp_reward, duration FROM lessons WHERE id = ?', [lessonId], (err, row) => {
+            db.get('SELECT xp_reward FROM lessons WHERE id = ?', [lessonId], (err, row) => {
                 if (err) reject(err);
-                else resolve(row || { xp_reward: 50, duration: 15 });
+                else resolve(row || { xp_reward: 50 });
             });
         });
+
+        const xpReward = lesson.xp_reward || 50;
 
         // Mark lesson as completed
         await new Promise((resolve, reject) => {
@@ -431,36 +440,51 @@ router.post('/complete-lesson', authenticate, async (req, res) => {
                 completed_at = datetime('now'),
                 xp_earned = ?,
                 updated_at = datetime('now')
-            `, [userId, lessonId, lesson.xp_reward, lesson.xp_reward], (err) => {
+            `, [userId, lessonId, xpReward, xpReward], (err) => {
                 if (err) reject(err);
                 else resolve();
             });
         });
 
         // Award XP
-        await awardXP(userId, lesson.xp_reward, 'lessons', lessonId, `Completed lesson: ${lessonId}`);
+        await new Promise((resolve, reject) => {
+            db.run(`
+                INSERT INTO xp_transactions (user_id, xp_amount, source, reference_id, description, created_at)
+                VALUES (?, ?, 'lessons', ?, 'Completed lesson', datetime('now'))
+            `, [userId, xpReward, lessonId], (err) => {
+                if (err) reject(err);
+                else resolve();
+            });
+        });
 
         // Update user total XP
         await new Promise((resolve, reject) => {
             db.run(`
-                UPDATE users 
-                SET total_xp = total_xp + ?, 
-                    completed_lessons = completed_lessons + 1,
-                    updated_at = datetime('now')
-                WHERE id = ?
-            `, [lesson.xp_reward, userId], (err) => {
+                UPDATE users SET total_xp = total_xp + ?, updated_at = datetime('now') WHERE id = ?
+            `, [xpReward, userId], (err) => {
                 if (err) reject(err);
                 else resolve();
             });
         });
 
         // Update streak
-        await updateUserStreak(userId);
+        const streakUpdate = await updateStreak(userId);
+        let streakBonus = 0;
+
+        if (streakUpdate && streakUpdate.isNewDay) {
+            streakBonus = await awardStreakBonus(userId, streakUpdate.current_streak);
+        }
 
         res.json({
             success: true,
             message: 'Lesson completed',
-            xpEarned: lesson.xp_reward
+            xpEarned: xpReward,
+            streak: streakUpdate ? {
+                current: streakUpdate.current_streak,
+                longest: streakUpdate.longest_streak,
+                isMilestone: streakUpdate.isMilestone,
+                bonusXP: streakBonus
+            } : null
         });
     } catch (error) {
         console.error('Error completing lesson:', error);
@@ -468,61 +492,53 @@ router.post('/complete-lesson', authenticate, async (req, res) => {
     }
 });
 
-// Helper function to award XP
-async function awardXP(userId, amount, source, referenceId, description) {
-    return new Promise((resolve, reject) => {
-        db.run(`
-            INSERT INTO xp_transactions (user_id, xp_amount, source, reference_id, description, created_at)
-            VALUES (?, ?, ?, ?, ?, datetime('now'))
-        `, [userId, amount, source, referenceId, description], (err) => {
-            if (err) reject(err);
-            else resolve();
+// Get user streak
+router.get('/streak', requireAuth, async (req, res) => {
+    try {
+        const userId = req.userId;
+        const streak = await getStreak(userId);
+
+        res.json({
+            success: true,
+            streak: {
+                current: streak.current_streak,
+                longest: streak.longest_streak,
+                lastActivity: streak.last_activity_date
+            }
         });
-    });
-}
+    } catch (error) {
+        console.error('Error fetching streak:', error);
+        res.status(500).json({ success: false, error: 'Failed to fetch streak' });
+    }
+});
 
-// Helper function to update user streak
-async function updateUserStreak(userId) {
-    return new Promise((resolve, reject) => {
-        db.get(`
-            SELECT current_streak, last_activity_date FROM user_streaks 
-            WHERE user_id = ?
-        `, [userId], (err, row) => {
-            if (err) {
-                reject(err);
-                return;
-            }
+// Get saved items count (for profile quick stats)
+router.get('/saved-count', requireAuth, async (req, res) => {
+    try {
+        const userId = req.user.id;
 
-            const today = new Date().toISOString().split('T')[0];
-            const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
-
-            let newStreak = 1;
-            if (row) {
-                const lastDate = row.last_activity_date?.split('T')[0];
-                if (lastDate === today) {
-                    // Already active today
-                    resolve();
-                    return;
-                } else if (lastDate === yesterday) {
-                    // Continue streak
-                    newStreak = (row.current_streak || 0) + 1;
-                }
-            }
-
-            // Update streak
-            db.run(`
-                INSERT INTO user_streaks (user_id, current_streak, last_activity_date, longest_streak)
-                VALUES (?, ?, datetime('now'), ?)
-                ON CONFLICT(user_id) DO UPDATE SET
-                current_streak = ?,
-                last_activity_date = datetime('now'),
-                longest_streak = MAX(longest_streak, ?)
-            `, [userId, newStreak, newStreak, newStreak, newStreak], (err) => {
+        const counts = await new Promise((resolve, reject) => {
+            db.get(`
+                SELECT 
+                    (SELECT COUNT(*) FROM bookmarks WHERE user_id = ?) as bookmarks,
+                    (SELECT COUNT(*) FROM likes WHERE user_id = ?) as likes,
+                    (SELECT COUNT(*) FROM reading_list WHERE user_id = ?) as reading_list
+            `, [userId, userId, userId], (err, row) => {
                 if (err) reject(err);
-                else resolve();
+                else resolve(row || { bookmarks: 0, likes: 0, reading_list: 0 });
             });
         });
-    });
-}
+
+        res.json({
+            success: true,
+            bookmarks: counts.bookmarks,
+            likes: counts.likes,
+            reading_list: counts.reading_list
+        });
+    } catch (error) {
+        console.error('Error fetching saved count:', error);
+        res.status(500).json({ success: false, error: 'Failed to fetch saved count' });
+    }
+});
 
 module.exports = router;

@@ -5,6 +5,7 @@ import {
     AlertTriangle, CheckCircle, X, Search, Upload
 } from 'lucide-react';
 import { adminAPI, lmsAPI } from '../../services/api';
+import { getApiImageUrl } from '../../utils/imageUtils';
 
 export default function ContentManagement() {
     const [content, setContent] = useState([]);
@@ -199,7 +200,7 @@ export default function ContentManagement() {
                     >
                         {(item.thumbnail || item.image_url) ? (
                             <img
-                                src={item.thumbnail?.startsWith('/') ? `http://localhost:5000${item.thumbnail}` : item.thumbnail || item.image_url}
+                                src={getApiImageUrl(item.thumbnail || item.image_url)}
                                 alt={item.title}
                                 className="w-full h-32 object-cover"
                                 onError={(e) => {
@@ -333,7 +334,7 @@ export default function ContentManagement() {
                                     {previewUrl && (
                                         <div className="mt-4 relative w-full h-40 rounded-lg overflow-hidden border border-white/10">
                                             <img
-                                                src={previewUrl.startsWith('blob:') ? previewUrl : (previewUrl.startsWith('/') ? `http://localhost:5000${previewUrl}` : previewUrl)}
+                                                src={previewUrl.startsWith('blob:') ? previewUrl : getApiImageUrl(previewUrl)}
                                                 alt="Preview"
                                                 className="w-full h-full object-cover"
                                             />

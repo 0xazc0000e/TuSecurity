@@ -5,6 +5,7 @@ import {
     Flame, Clock, BookOpen, Activity, Calendar,
     ChevronRight, Sparkles, Crown, Shield, Sword
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { apiCall } from '../../context/AuthContext';
 
 export const DashboardOverview = ({ user, xpData, progress }) => {
@@ -274,9 +275,9 @@ export const DashboardOverview = ({ user, xpData, progress }) => {
                         </div>
                         <h3 className="text-lg font-bold text-white">النشاطات الأخيرة</h3>
                     </div>
-                    <a href="/activity" className="text-sm text-purple-400 hover:text-purple-300 flex items-center gap-1">
+                    <Link to="/activity" className="text-sm text-purple-400 hover:text-purple-300 flex items-center gap-1">
                         عرض الكل <ChevronRight className="w-4 h-4" />
-                    </a>
+                    </Link>
                 </div>
 
                 {stats.recentActivity.length === 0 ? (

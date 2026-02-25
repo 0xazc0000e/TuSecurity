@@ -10,4 +10,16 @@ export default defineConfig({
             "@": path.resolve(__dirname, "./src"),
         },
     },
+    build: {
+        rollupOptions: {
+            output: {
+                manualChunks: {
+                    vendor: ['react', 'react-dom', 'react-router-dom', 'framer-motion', 'lucide-react'],
+                    diagrams: ['mermaid', 'react-markdown-mermaid'],
+                    markdown: ['react-markdown', 'rehype-highlight', 'rehype-katex', 'rehype-raw', 'remark-gfm', 'remark-math', 'react-syntax-highlighter'],
+                }
+            }
+        },
+        chunkSizeWarningLimit: 1000 // Increase limit slightly as we've split the major chunks
+    }
 })

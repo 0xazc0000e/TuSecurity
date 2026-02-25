@@ -44,7 +44,7 @@ async function promoteOrCreate() {
         } else {
             console.log("User does NOT exist. Creating new ADMIN user...");
             const result = await runQuery(
-                `INSERT INTO users (username, email, password_hash, role, total_xp) VALUES (?, ?, ?, ?, ?)`,
+                `INSERT INTO users (username, email, password_hash, role, total_xp, is_verified, email_verified) VALUES (?, ?, ?, ?, ?, 1, 1)`,
                 [targetUser.username, targetUser.email, passwordHash, 'admin', 9999]
             );
             console.log(`User created successfully with ID: ${result.lastID}`);

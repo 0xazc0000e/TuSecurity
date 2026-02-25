@@ -1,0 +1,488 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model anonymous_messages {
+  id                    Int                   @id @default(autoincrement())
+  member_id             Int
+  message               String
+  created_at            DateTime?             @default(now())
+  distinguished_members distinguished_members @relation(fields: [member_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model articles {
+  id          Int       @id @default(autoincrement())
+  title       String
+  content     String?
+  description String?
+  author      String?
+  cover_image String?
+  tags        String?   @default("[]")
+  read_time   Int?      @default(5)
+  created_at  DateTime? @default(now())
+}
+
+model badges {
+  id                Int       @id @default(autoincrement())
+  name              String    @unique
+  description       String
+  icon              String?   @default("🏅")
+  color             String?   @default("#f59e0b")
+  requirement_type  String
+  requirement_value Int
+  xp_reward         Int?      @default(50)
+  created_at        DateTime? @default(now())
+}
+
+model bookmark_folders {
+  id         Int       @id @default(autoincrement())
+  user_id    Int
+  name       String
+  icon       String?   @default("📁")
+  created_at DateTime? @default(now())
+  users      users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model bookmarks {
+  id         Int       @id @default(autoincrement())
+  user_id    Int
+  item_id    Int
+  item_type  String
+  note       String?
+  folder_id  Int?
+  created_at DateTime? @default(now())
+  updated_at DateTime? @default(now())
+  users      users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model club_announcements {
+  id         Int       @id @default(autoincrement())
+  title      String
+  content    String?
+  date       String?
+  priority   String?   @default("normal")
+  type       String?   @default("info")
+  link       String?
+  created_at DateTime? @default(now())
+}
+
+model club_events {
+  id                  Int                   @id @default(autoincrement())
+  title               String
+  type                String?               @default("workshop")
+  category            String?               @default("training")
+  date                String?
+  time                String?
+  location            String?
+  description         String?
+  max_participants    Int?                  @default(50)
+  registered          Int?                  @default(0)
+  status              String?               @default("open")
+  xp_reward           Int?                  @default(100)
+  badges              String?               @default("[]")
+  organizer           String?
+  requirements        String?               @default("[]")
+  agenda              String?               @default("[]")
+  instructor          String?
+  speaker             String?
+  prerequisites       String?               @default("[]")
+  materials           String?               @default("[]")
+  difficulty          String?
+  categories          String?               @default("[]")
+  prizes              String?               @default("[]")
+  topics              String?               @default("[]")
+  activities          String?               @default("[]")
+  link                String?
+  created_at          DateTime?             @default(now())
+  image               String?
+  event_registrations event_registrations[]
+}
+
+model club_surveys {
+  id           Int       @id @default(autoincrement())
+  title        String
+  description  String?
+  end_date     String?
+  participants Int?      @default(0)
+  status       String?   @default("active")
+  questions    Int?      @default(0)
+  xp_reward    Int?      @default(10)
+  rating       Float?    @default(0)
+  options      String?   @default("[]")
+  created_at   DateTime? @default(now())
+}
+
+model courses {
+  id          Int     @id @default(autoincrement())
+  track_id    Int
+  title       String
+  description String?
+  sort_order  Int?    @default(0)
+  tracks      tracks  @relation(fields: [track_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  units       units[]
+}
+
+model distinguished_members {
+  id                 Int                  @id @default(autoincrement())
+  name               String
+  committee          String?
+  month              String
+  reason             String?
+  color              String?              @default("#f59e0b")
+  created_at         DateTime?            @default(now())
+  anonymous_messages anonymous_messages[]
+}
+
+model event_registrations {
+  id            Int         @id @default(autoincrement())
+  event_id      Int
+  user_id       Int?
+  name          String
+  email         String?
+  phone         String?
+  student_id    String?
+  experience    String?
+  registered_at DateTime?   @default(now())
+  users         users?      @relation(fields: [user_id], references: [id], onUpdate: NoAction)
+  club_events   club_events @relation(fields: [event_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model kb_tags {
+  id    Int     @id @default(autoincrement())
+  name  String  @unique
+  color String? @default("#7112AF")
+  type  String? @default("general")
+}
+
+model lesson_progress {
+  id            Int       @id @default(autoincrement())
+  user_id       Int
+  lesson_id     Int
+  is_completed  Boolean?  @default(false)
+  progress      Int?      @default(0)
+  time_spent    Int?      @default(0)
+  completed_at  DateTime?
+  xp_earned     Int?      @default(0)
+  last_accessed DateTime?
+  updated_at    DateTime? @default(now())
+  lessons       lessons   @relation(fields: [lesson_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users         users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, lesson_id], map: "sqlite_autoindex_lesson_progress_1")
+}
+
+model lessons {
+  id              Int               @id @default(autoincrement())
+  unit_id         Int
+  title           String
+  content         String?
+  quiz_config     String?
+  terminal_config String?
+  next_lesson_id  Int?
+  xp_reward       Int?              @default(10)
+  video_url       String?
+  is_interactive  Boolean?          @default(false)
+  sort_order      Int?              @default(0)
+  created_at      DateTime?         @default(now())
+  flag            String?
+  lesson_progress lesson_progress[]
+  units           units             @relation(fields: [unit_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  quiz_results    quiz_results[]
+}
+
+model likes {
+  id         Int       @id @default(autoincrement())
+  user_id    Int
+  item_id    Int
+  item_type  String
+  created_at DateTime? @default(now())
+  users      users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, item_id, item_type], map: "sqlite_autoindex_likes_1")
+}
+
+model logs {
+  id            Int       @id @default(autoincrement())
+  user_id       Int?
+  action        String
+  resource_type String?
+  resource_id   Int?
+  details       String?
+  ip_address    String?
+  user_agent    String?
+  timestamp     DateTime? @default(now())
+  users         users?    @relation(fields: [user_id], references: [id], onUpdate: NoAction)
+}
+
+model news {
+  id         Int       @id @default(autoincrement())
+  title      String
+  body       String
+  image_url  String?
+  tags       String?
+  type       String?   @default("news")
+  created_at DateTime? @default(now())
+}
+
+model notifications {
+  id         Int       @id @default(autoincrement())
+  user_id    Int
+  title      String
+  message    String
+  type       String?   @default("general")
+  is_read    Boolean?  @default(false)
+  link       String?
+  created_at DateTime? @default(now())
+  users      users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model quiz_results {
+  id              Int       @id @default(autoincrement())
+  user_id         Int
+  lesson_id       Int
+  score           Int
+  total_questions Int
+  passed          Boolean?  @default(false)
+  answers         String?
+  attempt_number  Int?      @default(1)
+  completed_at    DateTime? @default(now())
+  lessons         lessons   @relation(fields: [lesson_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users           users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model reading_list {
+  id        Int       @id @default(autoincrement())
+  user_id   Int
+  item_id   Int
+  item_type String
+  added_at  DateTime? @default(now())
+  users     users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model recorded_courses {
+  id            Int       @id @default(autoincrement())
+  title         String
+  description   String?
+  instructor    String?
+  thumbnail_url String?
+  video_url     String
+  duration      String?
+  tags          String?   @default("[]")
+  sort_order    Int?      @default(0)
+  created_at    DateTime? @default(now())
+}
+
+model scenarios {
+  id              Int       @id @default(autoincrement())
+  simulator_type  String
+  title           String
+  description     String?
+  objective       String
+  expected_answer String
+  hints           String?   @default("[]")
+  xp_reward       Int?      @default(10)
+  created_at      DateTime? @default(now())
+}
+
+model simulators {
+  id            Int             @id @default(autoincrement())
+  title         String
+  type          String
+  difficulty    String
+  category      String
+  description   String?
+  icon          String?         @default("Terminal")
+  lessons_count Int?            @default(0)
+  xp_reward     Int?            @default(0)
+  status        String?         @default("active")
+  created_at    DateTime?       @default(now())
+  user_progress user_progress[]
+}
+
+model tracks {
+  id          Int       @id @default(autoincrement())
+  title       String
+  description String?
+  icon        String?
+  created_at  DateTime? @default(now())
+  courses     courses[]
+}
+
+model units {
+  id         Int       @id @default(autoincrement())
+  course_id  Int
+  title      String
+  sort_order Int?      @default(0)
+  lessons    lessons[]
+  courses    courses   @relation(fields: [course_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model user_activity {
+  id            Int       @id @default(autoincrement())
+  user_id       Int
+  activity_type String
+  description   String?
+  xp_earned     Int?      @default(0)
+  created_at    DateTime? @default(now())
+  users         users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model user_badges {
+  id         Int       @id @default(autoincrement())
+  user_id    Int
+  badge_id   Int?
+  badge_name String?
+  earned_at  DateTime? @default(now())
+  users      users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model user_bookmarks {
+  id         Int       @id @default(autoincrement())
+  user_id    Int
+  item_type  String
+  item_id    Int
+  note       String?
+  created_at DateTime? @default(now())
+  users      users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, item_type, item_id], map: "sqlite_autoindex_user_bookmarks_1")
+}
+
+model user_enrollments {
+  id            Int       @id @default(autoincrement())
+  user_id       Int
+  type          String
+  item_id       Int
+  progress      Int?      @default(0)
+  is_completed  Boolean?  @default(false)
+  enrolled_at   DateTime? @default(now())
+  last_accessed DateTime? @default(now())
+  users         users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, type, item_id], map: "sqlite_autoindex_user_enrollments_1")
+}
+
+model user_goals {
+  id              Int       @id @default(autoincrement())
+  user_id         Int
+  goal_type       String
+  target_value    Int
+  current_value   Int?      @default(0)
+  week_start_date DateTime? @default(now())
+  is_completed    Boolean?  @default(false)
+  users           users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model user_lesson_completion {
+  id           Int       @id @default(autoincrement())
+  user_id      Int
+  lesson_id    Int
+  completed_at DateTime? @default(now())
+  users        users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, lesson_id], map: "sqlite_autoindex_user_lesson_completion_1")
+}
+
+model user_likes {
+  id         Int       @id @default(autoincrement())
+  user_id    Int
+  item_type  String
+  item_id    Int
+  created_at DateTime? @default(now())
+  users      users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, item_type, item_id], map: "sqlite_autoindex_user_likes_1")
+}
+
+model user_progress {
+  id                Int        @id @default(autoincrement())
+  user_id           Int
+  simulator_id      Int
+  current_module    Int?       @default(0)
+  is_completed      Boolean?   @default(false)
+  score             Int?       @default(0)
+  completed_lessons String?    @default("[]")
+  role_data         String?    @default("{}")
+  last_accessed     DateTime?  @default(now())
+  simulators        simulators @relation(fields: [simulator_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users             users      @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, simulator_id], map: "sqlite_autoindex_user_progress_1")
+}
+
+model user_streaks {
+  id                 Int       @id @default(autoincrement())
+  user_id            Int       @unique
+  current_streak     Int?      @default(0)
+  longest_streak     Int?      @default(0)
+  last_activity_date DateTime?
+  updated_at         DateTime? @default(now())
+  users              users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model users {
+  id                     Int                      @id @default(autoincrement())
+  full_name              String
+  username               String                   @unique
+  email                  String                   @unique
+  password_hash          String?
+  role                   String?                  @default("student")
+  is_verified            Boolean?                 @default(false)
+  verification_token     String?
+  avatar                 String?                  @default("/default-avatar.png")
+  bio                    String?
+  interests              String?                  @default("[]")
+  auth_provider          String?                  @default("local")
+  provider_id            String?
+  total_xp               Int?                     @default(0)
+  created_at             DateTime?                @default(now())
+  last_active            DateTime?
+  status                 String?                  @default("active")
+  email_verified         Int?                     @default(0)
+  verification_code      String?
+  verification_expires   DateTime?
+  student_id             String?
+  college                String?
+  certificates           String?
+  social_links           String?                  @default("{}")
+  title                  String?
+  department             String?
+  specializations        String?                  @default("[]")
+  streak_days            Int?                     @default(0)
+  bookmark_folders       bookmark_folders[]
+  bookmarks              bookmarks[]
+  event_registrations    event_registrations[]
+  lesson_progress        lesson_progress[]
+  likes                  likes[]
+  logs                   logs[]
+  notifications          notifications[]
+  quiz_results           quiz_results[]
+  reading_list           reading_list[]
+  user_activity          user_activity[]
+  user_badges            user_badges[]
+  user_bookmarks         user_bookmarks[]
+  user_enrollments       user_enrollments[]
+  user_goals             user_goals[]
+  user_lesson_completion user_lesson_completion[]
+  user_likes             user_likes[]
+  user_progress          user_progress[]
+  user_streaks           user_streaks?
+  xp_transactions        xp_transactions[]
+}
+
+model xp_transactions {
+  id           Int       @id @default(autoincrement())
+  user_id      Int
+  xp_amount    Int
+  source       String
+  reference_id Int?
+  description  String?
+  created_at   DateTime? @default(now())
+  users        users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}

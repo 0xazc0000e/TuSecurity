@@ -9,8 +9,10 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
+    "@prisma/client": "^7.4.1",
     "bcrypt": "^5.1.1",
     "bcryptjs": "^3.0.3",
+    "better-sqlite3": "^12.6.2",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "dotenv": "^16.6.1",
@@ -24,10 +26,13 @@
     "passport-google-oauth20": "^2.0.0",
     "passport-microsoft": "^2.1.0",
     "passport-mock-strategy": "^2.0.0",
-    "sqlite3": "^5.1.7"
+    "rate-limit-redis": "^4.3.1",
+    "redis": "^5.11.0",
+    "sqlite": "^5.1.1"
   },
   "devDependencies": {
-    "nodemon": "^3.0.1"
+    "nodemon": "^3.0.1",
+    "prisma": "^7.4.1"
   },
   "keywords": [
     "cybersecurity",

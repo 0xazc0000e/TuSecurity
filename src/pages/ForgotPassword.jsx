@@ -3,8 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Mail, ArrowRight, AlertCircle, CheckCircle, ChevronLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { MatrixBackground } from '../components/ui/MatrixBackground';
-
-const API_BASE_URL = 'http://localhost:5000/api';
+import { apiCall } from '../context/AuthContext';
 
 export default function ForgotPassword() {
     const navigate = useNavigate();
@@ -20,24 +19,17 @@ export default function ForgotPassword() {
         setSuccess('');
 
         try {
-            const response = await fetch(`${API_BASE_URL}/auth/forgot-password`, {
+            const data = await apiCall('/auth/forgot-password', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email })
             });
 
-            const data = await response.json();
-
-            if (response.ok) {
-                setSuccess('تم إرسال رمز إعادة التعيين إلى بريدك الإلكتروني.');
-                setTimeout(() => {
-                    navigate('/reset-password', { state: { email } });
-                }, 2000);
-            } else {
-                setError(data.error || 'حدث خطأ. حاول مرة أخرى.');
-            }
+            setSuccess(data.message || 'تم إرسال رمز إعادة التعيين إلى بريدك الإلكتروني.');
+            setTimeout(() => {
+                navigate('/reset-password', { state: { email } });
+            }, 2000);
         } catch (err) {
-            setError('لا يمكن الاتصال بالخادم.');
+            setError(err.message || 'لا يمكن الاتصال بالخادم.');
         } finally {
             setLoading(false);
         }

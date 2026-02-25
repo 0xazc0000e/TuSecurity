@@ -1,11 +1,12 @@
 import React, { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Calendar, Users, Filter, Zap, Globe, Shield, Terminal, AlertTriangle, Play, ChevronLeft, User } from 'lucide-react';
+import { Calendar, Users, Filter, Zap, Globe, Shield, Terminal, AlertTriangle, Play, ChevronLeft, User, Plus } from 'lucide-react';
 import { SectionHeader } from '../components/ui/SectionHeader';
 import { MatrixBackground } from '../components/ui/MatrixBackground';
 import { useAnalytics } from '../context/AnalyticsContext';
 import { useAuth } from '../context/AuthContext';
 import { InteractionBar } from '../components/ui/InteractionBar';
+import MarkdownEditorModal from '../components/ui/MarkdownEditorModal';
 
 const SPOTLIGHT_THREAT = {
     title: 'هجوم SolarWinds: القصة الكاملة',
@@ -17,10 +18,13 @@ const SPOTLIGHT_THREAT = {
 export default function News() {
     const { cognitiveLayers, logEvent } = useAnalytics();
     // const { news: NEWS_DATA } = useDatabase(); // Removed unused hook
-    const { apiCall } = useAuth();
+    const { apiCall, user } = useAuth();
     const [newsData, setNewsData] = useState([]);
     const [view, setView] = useState('personal'); // personal, spotlight, micro, filter
     const [loading, setLoading] = useState(true);
+    const [showEditorModal, setShowEditorModal] = useState(false);
+
+    const isEditor = user?.role === 'admin' || user?.role === 'editor';
 
     useEffect(() => {
         const fetchNews = async () => {
@@ -34,7 +38,23 @@ export default function News() {
             }
         };
         fetchNews();
-    }, []);
+    }, [apiCall]);
+
+    const handleCreateNews = async (formData) => {
+        try {
+            await apiCall('/news', {
+                method: 'POST',
+                body: formData
+            });
+            setShowEditorModal(false);
+            // Refresh news
+            const updatedNews = await apiCall('/news');
+            setNewsData(updatedNews);
+        } catch (error) {
+            console.error('Failed to create news:', error);
+            alert('فشل في نشر الخبر');
+        }
+    };
 
     // Personalized Sort
     const personalizedNews = useMemo(() => {
@@ -58,22 +78,32 @@ export default function News() {
             <div className="max-w-7xl mx-auto">
                 <SectionHeader title="المركز الإعلامي" subtitle="مختبر الوعي السيبراني" />
 
-                {/* VIEW TABS */}
-                <div className="flex gap-4 mb-8 border-b border-white/10 pb-4 overflow-x-auto">
-                    {[
-                        { id: 'personal', label: 'تغذية شخصية', icon: <User /> },
-                        { id: 'spotlight', label: 'بؤرة التهديد', icon: <AlertTriangle /> },
-                        { id: 'micro', label: 'موجز سريع', icon: <Zap /> },
-                        // { id: 'filter', label: 'تصفية', icon: <Filter /> }
-                    ].map(tab => (
+                {/* VIEW TABS & ADD BUTTON */}
+                <div className="flex justify-between items-center mb-8 border-b border-white/10 pb-4">
+                    <div className="flex gap-4 overflow-x-auto">
+                        {[
+                            { id: 'personal', label: 'تغذية شخصية', icon: <User /> },
+                            { id: 'spotlight', label: 'بؤرة التهديد', icon: <AlertTriangle /> },
+                            { id: 'micro', label: 'موجز سريع', icon: <Zap /> },
+                        ].map(tab => (
+                            <button
+                                key={tab.id}
+                                onClick={() => setView(tab.id)}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold transition-all whitespace-nowrap ${view === tab.id ? 'bg-[#7112AF] text-white' : 'text-slate-400 hover:text-white'}`}
+                            >
+                                {tab.icon} {tab.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    {isEditor && (
                         <button
-                            key={tab.id}
-                            onClick={() => setView(tab.id)}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-bold transition-all whitespace-nowrap ${view === tab.id ? 'bg-[#7112AF] text-white' : 'text-slate-400 hover:text-white'}`}
+                            onClick={() => setShowEditorModal(true)}
+                            className="bg-[#7112AF] hover:bg-[#5a0d8e] text-white px-5 py-2.5 rounded-xl flex items-center gap-2 font-bold transition-all"
                         >
-                            {tab.icon} {tab.label}
+                            <Plus size={18} /> إضافة خبر
                         </button>
-                    ))}
+                    )}
                 </div>
 
                 <AnimatePresence mode="wait">
@@ -153,6 +183,13 @@ export default function News() {
                     )}
                 </AnimatePresence>
             </div>
+
+            <MarkdownEditorModal
+                isOpen={showEditorModal}
+                onClose={() => setShowEditorModal(false)}
+                onSubmit={handleCreateNews}
+                type="news"
+            />
         </div>
     );
 }

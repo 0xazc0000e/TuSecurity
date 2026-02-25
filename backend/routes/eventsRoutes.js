@@ -204,7 +204,7 @@ router.post('/:id/register', (req, res) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
     let userId = null;
-    
+
     if (token) {
         try {
             const jwt = require('jsonwebtoken');
@@ -216,16 +216,32 @@ router.post('/:id/register', (req, res) => {
         }
     }
 
-    db.run(
-        `INSERT INTO event_registrations (event_id, user_id, name, email, phone, student_id, experience) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [eventId, userId, name, email, phone, student_id, experience],
-        function (err) {
-            if (err) return res.status(500).json({ error: err.message });
-            // Auto-increment registered count
-            db.run(`UPDATE club_events SET registered = registered + 1 WHERE id = ?`, [eventId]);
-            res.json({ id: this.lastID, message: 'تم التسجيل بنجاح' });
+    // Check if already registered
+    const checkQuery = userId
+        ? 'SELECT id FROM event_registrations WHERE event_id = ? AND user_id = ?'
+        : 'SELECT id FROM event_registrations WHERE event_id = ? AND email = ?';
+
+    const checkParams = userId
+        ? [eventId, userId]
+        : [eventId, email];
+
+    db.get(checkQuery, checkParams, (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (row) {
+            return res.status(400).json({ error: 'عذراً، أنت مسجل بالفعل في هذه الفعالية' });
         }
-    );
+
+        db.run(
+            `INSERT INTO event_registrations (event_id, user_id, name, email, phone, student_id, experience) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            [eventId, userId, name, email, phone, student_id, experience],
+            function (insertErr) {
+                if (insertErr) return res.status(500).json({ error: insertErr.message });
+                // Auto-increment registered count
+                db.run(`UPDATE club_events SET registered = registered + 1 WHERE id = ?`, [eventId]);
+                res.json({ id: this.lastID, message: 'تم التسجيل بنجاح' });
+            }
+        );
+    });
 });
 
 // GET registrations for a specific event (admin)

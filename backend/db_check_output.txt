@@ -1,0 +1,8 @@
+--- cyberclub.db ---
+Admins: [(1, 'azzz', 'az.jo.fm@gmail.com', 'admin'), (8, 'admin', 'admin@tu.edu.sa', 'admin')]
+Lessons: 17
+Events: 41
+--- cyberclub2.db ---
+Admins: [(1, 'azzz', 'az.jo.fm@gmail.com', 'admin'), (8, 'admin', 'admin@tu.edu.sa', 'admin')]
+Lessons: 17
+Events: 41

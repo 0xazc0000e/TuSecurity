@@ -1,19 +1,18 @@
 const express = require('express');
-const { authenticate } = require('../controllers/authController');
+const { requireAuth } = require('../middleware/rbacMiddleware');
 const { db } = require('../models/database');
 
 const router = express.Router();
 
 // Get all saved items (bookmarks, likes, reading list, folders)
-router.get('/saved-items', authenticate, async (req, res) => {
+router.get('/saved-items', requireAuth, async (req, res) => {
     try {
-        const userId = req.user.id;
+        const userId = req.userId;
 
-        // Get bookmarks
+        // Get bookmarks with item details
         const bookmarks = await new Promise((resolve, reject) => {
             db.all(`
-                SELECT 
-                    b.*,
+                SELECT b.*, 
                     COALESCE(a.title, l.title, s.title, n.title, 'غير معنون') as title,
                     COALESCE(a.reading_time, l.duration, 5) as reading_time,
                     b.folder_id
@@ -30,11 +29,10 @@ router.get('/saved-items', authenticate, async (req, res) => {
             });
         });
 
-        // Get likes
+        // Get likes with item details
         const likes = await new Promise((resolve, reject) => {
             db.all(`
-                SELECT 
-                    l.*,
+                SELECT l.*,
                     COALESCE(a.title, n.title, s.title, 'غير معنون') as title
                 FROM likes l
                 LEFT JOIN articles a ON l.item_type = 'article' AND l.item_id = a.id
@@ -51,8 +49,7 @@ router.get('/saved-items', authenticate, async (req, res) => {
         // Get reading list
         const readingList = await new Promise((resolve, reject) => {
             db.all(`
-                SELECT 
-                    rl.*,
+                SELECT rl.*,
                     COALESCE(a.title, l.title, 'غير معنون') as title,
                     COALESCE(a.reading_time, l.duration, 5) as reading_time
                 FROM reading_list rl
@@ -69,8 +66,7 @@ router.get('/saved-items', authenticate, async (req, res) => {
         // Get folders
         const folders = await new Promise((resolve, reject) => {
             db.all(`
-                SELECT 
-                    f.*,
+                SELECT f.*, 
                     (SELECT COUNT(*) FROM bookmarks WHERE folder_id = f.id) as count
                 FROM bookmark_folders f
                 WHERE f.user_id = ?
@@ -78,38 +74,16 @@ router.get('/saved-items', authenticate, async (req, res) => {
             `, [userId], (err, rows) => {
                 if (err) reject(err);
                 else {
-                    // Add default folder if no folders exist
-                    if (!rows || rows.length === 0) {
-                        resolve([
-                            { id: 'default', name: 'الكل', icon: '📁', count: bookmarks.length, is_default: true },
-                            { id: 'favorites', name: 'المفضلة', icon: '⭐', count: 0, is_default: true },
-                            { id: 'reading', name: 'للقراءة لاحقاً', icon: '📖', count: 0, is_default: true }
-                        ]);
-                    } else {
-                        // Add default "All" folder
-                        const allFolder = { 
-                            id: 'default', 
-                            name: 'الكل', 
-                            icon: '📁', 
-                            count: bookmarks.length,
-                            is_default: true 
-                        };
-                        resolve([allFolder, ...rows]);
-                    }
+                    // Add default folders
+                    const allFolder = { 
+                        id: 'default', 
+                        name: 'الكل', 
+                        icon: '📁', 
+                        count: bookmarks.length,
+                        is_default: true 
+                    };
+                    resolve([allFolder, ...(rows || [])]);
                 }
-            });
-        });
-
-        // Get saved counts for quick stats
-        const counts = await new Promise((resolve, reject) => {
-            db.get(`
-                SELECT 
-                    (SELECT COUNT(*) FROM bookmarks WHERE user_id = ?) as bookmarks_count,
-                    (SELECT COUNT(*) FROM likes WHERE user_id = ?) as likes_count,
-                    (SELECT COUNT(*) FROM reading_list WHERE user_id = ?) as reading_list_count
-            `, [userId, userId, userId], (err, row) => {
-                if (err) reject(err);
-                else resolve(row || { bookmarks_count: 0, likes_count: 0, reading_list_count: 0 });
             });
         });
 
@@ -118,12 +92,7 @@ router.get('/saved-items', authenticate, async (req, res) => {
             bookmarks,
             likes,
             readingList,
-            folders,
-            counts: {
-                bookmarks: counts.bookmarks_count,
-                likes: counts.likes_count,
-                readingList: counts.reading_list_count
-            }
+            folders
         });
     } catch (error) {
         console.error('Error fetching saved items:', error);
@@ -132,9 +101,9 @@ router.get('/saved-items', authenticate, async (req, res) => {
 });
 
 // Add bookmark
-router.post('/bookmarks/add', authenticate, async (req, res) => {
+router.post('/bookmarks/add', requireAuth, async (req, res) => {
     try {
-        const userId = req.user.id;
+        const userId = req.userId;
         const { itemId, itemType, note, folderId } = req.body;
 
         // Check if already bookmarked
@@ -167,19 +136,6 @@ router.post('/bookmarks/add', authenticate, async (req, res) => {
             });
         });
 
-        // Update user's bookmarks count
-        await new Promise((resolve, reject) => {
-            db.run(`
-                UPDATE users 
-                SET bookmarks_count = bookmarks_count + 1,
-                    updated_at = datetime('now')
-                WHERE id = ?
-            `, [userId], (err) => {
-                if (err) reject(err);
-                else resolve();
-            });
-        });
-
         res.json({
             success: true,
             message: 'Item bookmarked successfully',
@@ -192,30 +148,16 @@ router.post('/bookmarks/add', authenticate, async (req, res) => {
 });
 
 // Remove bookmark
-router.post('/bookmarks/remove', authenticate, async (req, res) => {
+router.post('/bookmarks/remove', requireAuth, async (req, res) => {
     try {
-        const userId = req.user.id;
+        const userId = req.userId;
         const { itemId, itemType } = req.body;
 
-        // Delete bookmark
         await new Promise((resolve, reject) => {
             db.run(`
                 DELETE FROM bookmarks 
                 WHERE user_id = ? AND item_id = ? AND item_type = ?
             `, [userId, itemId, itemType], (err) => {
-                if (err) reject(err);
-                else resolve();
-            });
-        });
-
-        // Update user's bookmarks count
-        await new Promise((resolve, reject) => {
-            db.run(`
-                UPDATE users 
-                SET bookmarks_count = MAX(0, bookmarks_count - 1),
-                    updated_at = datetime('now')
-                WHERE id = ?
-            `, [userId], (err) => {
                 if (err) reject(err);
                 else resolve();
             });
@@ -229,9 +171,9 @@ router.post('/bookmarks/remove', authenticate, async (req, res) => {
 });
 
 // Add like
-router.post('/likes/add', authenticate, async (req, res) => {
+router.post('/likes/add', requireAuth, async (req, res) => {
     try {
-        const userId = req.user.id;
+        const userId = req.userId;
         const { itemId, itemType } = req.body;
 
         // Check if already liked
@@ -275,10 +217,7 @@ router.post('/likes/add', authenticate, async (req, res) => {
         if (table) {
             await new Promise((resolve, reject) => {
                 db.run(`
-                    UPDATE ${table} 
-                    SET likes_count = likes_count + 1,
-                        updated_at = datetime('now')
-                    WHERE id = ?
+                    UPDATE ${table} SET likes_count = likes_count + 1 WHERE id = ?
                 `, [itemId], (err) => {
                     if (err) reject(err);
                     else resolve();
@@ -298,12 +237,11 @@ router.post('/likes/add', authenticate, async (req, res) => {
 });
 
 // Remove like
-router.post('/likes/remove', authenticate, async (req, res) => {
+router.post('/likes/remove', requireAuth, async (req, res) => {
     try {
-        const userId = req.user.id;
+        const userId = req.userId;
         const { itemId, itemType } = req.body;
 
-        // Delete like
         await new Promise((resolve, reject) => {
             db.run(`
                 DELETE FROM likes 
@@ -325,10 +263,7 @@ router.post('/likes/remove', authenticate, async (req, res) => {
         if (table) {
             await new Promise((resolve, reject) => {
                 db.run(`
-                    UPDATE ${table} 
-                    SET likes_count = MAX(0, likes_count - 1),
-                        updated_at = datetime('now')
-                    WHERE id = ?
+                    UPDATE ${table} SET likes_count = MAX(0, likes_count - 1) WHERE id = ?
                 `, [itemId], (err) => {
                     if (err) reject(err);
                     else resolve();
@@ -344,9 +279,9 @@ router.post('/likes/remove', authenticate, async (req, res) => {
 });
 
 // Add to reading list
-router.post('/reading-list/add', authenticate, async (req, res) => {
+router.post('/reading-list/add', requireAuth, async (req, res) => {
     try {
-        const userId = req.user.id;
+        const userId = req.userId;
         const { itemId, itemType } = req.body;
 
         // Check if already in reading list
@@ -391,9 +326,9 @@ router.post('/reading-list/add', authenticate, async (req, res) => {
 });
 
 // Remove from reading list
-router.post('/reading-list/remove', authenticate, async (req, res) => {
+router.post('/reading-list/remove', requireAuth, async (req, res) => {
     try {
-        const userId = req.user.id;
+        const userId = req.userId;
         const { itemId, itemType } = req.body;
 
         await new Promise((resolve, reject) => {
@@ -413,10 +348,10 @@ router.post('/reading-list/remove', authenticate, async (req, res) => {
     }
 });
 
-// Create bookmark folder
-router.post('/folders/create', authenticate, async (req, res) => {
+// Create folder
+router.post('/folders/create', requireAuth, async (req, res) => {
     try {
-        const userId = req.user.id;
+        const userId = req.userId;
         const { name, icon } = req.body;
 
         if (!name || name.trim().length === 0) {
@@ -450,16 +385,15 @@ router.post('/folders/create', authenticate, async (req, res) => {
 });
 
 // Move bookmark to folder
-router.post('/bookmarks/move', authenticate, async (req, res) => {
+router.post('/bookmarks/move', requireAuth, async (req, res) => {
     try {
-        const userId = req.user.id;
+        const userId = req.userId;
         const { itemId, folderId } = req.body;
 
         await new Promise((resolve, reject) => {
             db.run(`
                 UPDATE bookmarks 
-                SET folder_id = ?,
-                    updated_at = datetime('now')
+                SET folder_id = ?, updated_at = datetime('now')
                 WHERE user_id = ? AND item_id = ?
             `, [folderId, userId, itemId], (err) => {
                 if (err) reject(err);
@@ -475,9 +409,9 @@ router.post('/bookmarks/move', authenticate, async (req, res) => {
 });
 
 // Get saved count for quick stats
-router.get('/saved-count', authenticate, async (req, res) => {
+router.get('/saved-count', requireAuth, async (req, res) => {
     try {
-        const userId = req.user.id;
+        const userId = req.userId;
 
         const counts = await new Promise((resolve, reject) => {
             db.get(`
@@ -503,10 +437,10 @@ router.get('/saved-count', authenticate, async (req, res) => {
     }
 });
 
-// Check if item is bookmarked/liked (for UI state)
-router.get('/item-status/:itemType/:itemId', authenticate, async (req, res) => {
+// Check if item is bookmarked/liked
+router.get('/item-status/:itemType/:itemId', requireAuth, async (req, res) => {
     try {
-        const userId = req.user.id;
+        const userId = req.userId;
         const { itemType, itemId } = req.params;
 
         const [isBookmarked, isLiked, inReadingList] = await Promise.all([

@@ -4,6 +4,7 @@ import { Shield, Menu, X, Globe, Terminal, Cpu, User, LogOut } from 'lucide-reac
 import { NavLink } from '../components/ui/NavLink';
 import { useAuth } from '../context/AuthContext';
 import { XIcon, LinkedInIcon, TelegramIcon, TikTokIcon, WhatsAppIcon } from '../components/ui/SocialIcons';
+import { getApiImageUrl } from '../utils/imageUtils';
 
 const SECTIONS = [
     { id: 'home', label: 'الرئيسية', path: '/' },
@@ -81,7 +82,7 @@ export default function Layout() {
                                 </button>
                                 <button onClick={() => navigate('/profile')} className="relative p-0.5 rounded-full border border-white/10 hover:border-[#7112AF] transition-all overflow-hidden w-10 h-10">
                                     {user.avatar ? (
-                                        <img src={user.avatar.startsWith('http') ? user.avatar : `http://localhost:5000${user.avatar}`} alt="Avatar" className="w-full h-full object-cover rounded-full" />
+                                        <img src={getApiImageUrl(user.avatar)} alt="Avatar" className="w-full h-full object-cover rounded-full" />
                                     ) : (
                                         <div className="w-full h-full bg-[#7112AF]/20 flex items-center justify-center text-[#7112AF]">
                                             <User size={20} />

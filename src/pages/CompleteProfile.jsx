@@ -4,7 +4,7 @@ import { Upload, ChevronLeft, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { MatrixBackground } from '../components/ui/MatrixBackground';
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 const INTERESTS_LIST = [
     "اختبار الاختراق", "محلل مركز العمليات الأمنية (SOC)", "تحليل البرمجيات الخبيثة",
@@ -60,9 +60,9 @@ export default function CompleteProfile() {
 
             if (data.success || res.ok) {
                 // Determine redirect or default to dashboard
-                const redirect = data.redirectTo || '/dashboard';
+                const redirect = data.redirectTo || '/profile';
                 // Force reload to update user state in AuthContext
-                window.location.href = (redirect === '/dashboard' ? '/' : redirect);
+                window.location.href = (redirect === '/dashboard' ? '/profile' : redirect);
             } else {
                 alert('فشل التحديث');
             }
@@ -119,8 +119,8 @@ export default function CompleteProfile() {
                                         type="button"
                                         onClick={() => toggleInterest(interest)}
                                         className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${interests.includes(interest)
-                                                ? 'bg-purple-600 text-white'
-                                                : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                                            ? 'bg-purple-600 text-white'
+                                            : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
                                             }`}
                                     >
                                         {interest}

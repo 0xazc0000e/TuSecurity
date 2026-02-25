@@ -1,4 +1,4 @@
-import { useAuth } from '../context/AuthContext';
+// API Service Layer
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
@@ -11,15 +11,19 @@ async function apiCall(endpoint, options = {}, token = null) {
             'Content-Type': 'application/json',
             ...options.headers
         },
+        credentials: 'true', // Temporarily using string to see if it causes issues, but it should be standard 'include'
         ...options
     };
+
+    // Ensure credentials: 'include' is set for cookies to be sent
+    config.credentials = 'include';
 
     // If body is FormData, remove Content-Type to let browser set boundary
     if (options.body instanceof FormData) {
         delete config.headers['Content-Type'];
     }
 
-    // Use provided token or get from localStorage
+    // Keep token in headers for backward compatibility during transition if needed
     const authToken = token || localStorage.getItem('token');
     if (authToken) {
         config.headers.Authorization = `Bearer ${authToken}`;
@@ -90,6 +94,11 @@ export const simulatorsAPI = {
     }),
 
     saveAttackProgress: (data) => apiCall('/simulators/progress/attack', {
+        method: 'POST',
+        body: JSON.stringify(data)
+    }),
+
+    validateMission: (data) => apiCall('/simulators/validate', {
         method: 'POST',
         body: JSON.stringify(data)
     })
@@ -247,6 +256,10 @@ export const lmsAPI = {
         return res.completedLessons || [];
     },
     markLessonComplete: (id) => apiCall(`/lms/lessons/${id}/complete`, { method: 'POST' }),
+
+    // Quiz / Flag Submission
+    submitQuiz: (data) => apiCall('/lms/quiz/submit', { method: 'POST', body: JSON.stringify(data) }),
+    submitFlag: (data) => apiCall('/lms/flag/submit', { method: 'POST', body: JSON.stringify(data) })
 };
 
 // News API

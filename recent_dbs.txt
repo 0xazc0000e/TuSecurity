@@ -1,0 +1,2 @@
+/home/azo/Documents/tu_clup_cyper_the_end111/backend/cyberclub.db
+/home/azo/Documents/tu_clup_cyper_the_end111/backend/database.sqlite

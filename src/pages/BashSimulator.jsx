@@ -2,6 +2,53 @@ import React, { useState, useEffect, useRef } from 'react';
 import { ChevronLeft, ChevronRight, Terminal, Book, Target, Award, Clock, CheckCircle, Lock, Play, HelpCircle } from 'lucide-react';
 import { BASH_CURRICULUM } from '../data/bashCurriculum';
 import { useNavigate } from 'react-router-dom';
+import { simulatorsAPI } from '../services/api';
+
+import { useNavigate } from 'react-router-dom';
+import { simulatorsAPI } from '../services/api';
+
+// Flatten the curriculum structure for the simulator UI
+let globalMissionId = 1;
+
+const stages = BASH_CURRICULUM.stages.map(stage => {
+    // Flatten all tasks from all units in this stage into a single 'missions' array
+    const missions = stage.units.flatMap(unit =>
+        unit.tasks.map(task => ({
+            ...task,
+            id: globalMissionId++, // Sequential ID matching backend validation 1, 2, 3...
+            points: task.xp,
+            helpText: unit.theory.introduction,
+            commonMistakes: [`Typing the command incorrectly`, `Missing the expected spaces or arguments`],
+            realWorldExample: unit.theory.importance,
+            detailedExplanation: unit.theory.keyConcepts.join('\n')
+        }))
+    );
+
+    return {
+        id: stage.id,
+        title: stage.title,
+        icon: Terminal, // Using Terminal as generic icon for now
+        color: stage.color === 'green' ? 'from-emerald-400 to-emerald-600' :
+            stage.color === 'blue' ? 'from-blue-400 to-blue-600' :
+                stage.color === 'purple' ? 'from-purple-400 to-purple-600' :
+                    stage.color === 'orange' ? 'from-orange-400 to-orange-600' :
+                        'from-red-400 to-red-600',
+        theoryLesson: stage.units[0].theory, // Simplification
+        missions: missions
+    };
+});
+
+const initialFileSystem = {
+    '/': ['home', 'etc', 'var', 'usr', 'bin', 'root'],
+    '/home': ['student', 'admin'],
+    '/home/student': ['documents', 'downloads', 'pictures', 'projects'],
+    '/home/student/documents': ['notes.txt', 'important.txt'],
+    '/home/student/projects': ['web', 'scripts'],
+    '/home/student/projects/scripts': ['test.sh'],
+    '/etc': ['passwd', 'hostname', 'hosts'],
+    '/var': ['log', 'www', 'tmp'],
+    '/var/log': ['syslog', 'auth.log']
+};
 
 export default function BashSimulator() {
     const navigate = useNavigate();
@@ -366,7 +413,7 @@ file.txt           100%[===================>]   1.23K  --.-KB/s
         }
     };
 
-    const handleCommand = () => {
+    const handleCommand = async () => {
         if (!input.trim()) return;
 
         const cmd = input.trim();
@@ -377,24 +424,31 @@ file.txt           100%[===================>]   1.23K  --.-KB/s
             addTerminalLine('output', output);
         }
 
-        // Check if command matches mission
-        const missionCmd = currentMission.command.split(' ')[0];
-        const inputCmd = cmd.split(' ')[0];
+        setInput('');
 
-        // Normalize command for comparison (handles different args order or optional args if simple check)
-        // For this simple sim, we check if command matches exactly or if the main command matches and we trust the user knew what they were doing
-        // Better: Check if the exact expected command was typed, or if the user achieved the goal (e.g. created file)
-        // The original code checks:
-        if (inputCmd === missionCmd || cmd === currentMission.command) {
-            if (!output?.includes('No such file') && !output?.includes('cannot') && !output?.includes('missing')) {
-                handleMissionSuccess();
+        // Attempt Backend Validation
+        try {
+            // Note: In a real advanced setup, you'd send the VFS state too.
+            // Here we just send the command and mission ID.
+            const validationResponse = await simulatorsAPI.validateMission({
+                simulator_id: 1, // Bash Simulator ID
+                mission_id: currentMission.id,
+                command: cmd
+            });
+
+            if (validationResponse.success) {
+                handleMissionSuccess(validationResponse.xpAwarded);
+            }
+        } catch (error) {
+            // If it fails validation (400 error), we just do nothing as the command was wrong
+            // If it's a real server error (500), we might want to log it
+            if (error.status === 500) {
+                console.error('Validation server error:', error);
             }
         }
-
-        setInput('');
     };
 
-    const handleMissionSuccess = () => {
+    const handleMissionSuccess = (bxp = null) => {
         if (progress.completedMissions.includes(currentMission.id)) {
             addTerminalLine('info', '✓ Mission already completed!');
             return;
@@ -402,7 +456,8 @@ file.txt           100%[===================>]   1.23K  --.-KB/s
 
         setShowSuccess(true);
 
-        const newPoints = progress.totalPoints + currentMission.points;
+        const earnedPoints = bxp || currentMission.points;
+        const newPoints = progress.totalPoints + earnedPoints;
         const newStreak = progress.streak + 1;
 
         setProgress(prev => ({

@@ -20,11 +20,14 @@ export async function apiCall(endpoint, options = {}) {
         delete config.headers['Content-Type'];
     }
 
-    // Add auth token if available
+    // Keep token support for backward compatibility during transition
     const token = localStorage.getItem('token');
     if (token) {
         config.headers.Authorization = `Bearer ${token}`;
     }
+
+    // Ensure credentials are sent to allow cookies
+    config.credentials = 'include';
 
     try {
         const response = await fetch(url, config);
@@ -72,14 +75,10 @@ export const AuthProvider = ({ children }) => {
     // User needs onboarding if authenticated but missing bio (profile not completed)
     const needsOnboarding = isAuthenticated && user && !user.bio;
 
-    // Check for stored token on mount
+    // Check for session on mount by trying to fetch profile
+    // HttpOnly cookies mean we can't check localStorage for auth status
     useEffect(() => {
-        const token = localStorage.getItem('token');
-        if (token) {
-            fetchProfile();
-        } else {
-            setLoading(false);
-        }
+        fetchProfile();
     }, []);
 
     // Fetch user profile from real API
@@ -107,8 +106,11 @@ export const AuthProvider = ({ children }) => {
                 body: JSON.stringify({ email, password })
             });
 
-            // Store JWT token
-            localStorage.setItem('token', data.token);
+            // Store JWT token locally ONLY for testing/backward compatibility until all routes are fully migrated
+            // The actual secure token is now in the HttpOnly cookie
+            if (data.token) {
+                localStorage.setItem('token', data.token);
+            }
             setUser(data.user);
             setIsAuthenticated(true);
             return { success: true, user: data.user };
@@ -168,11 +170,17 @@ export const AuthProvider = ({ children }) => {
         }
     };
 
-    // Logout function - clear token and state
-    const logout = () => {
-        localStorage.removeItem('token');
-        setUser(null);
-        setIsAuthenticated(false);
+    // Logout function - call backend to clear cookie
+    const logout = async () => {
+        try {
+            await apiCall('/auth/logout', { method: 'POST' });
+        } catch (error) {
+            console.error('Logout error:', error);
+        } finally {
+            localStorage.removeItem('token');
+            setUser(null);
+            setIsAuthenticated(false);
+        }
     };
 
     // Update profile - PUT to real backend
