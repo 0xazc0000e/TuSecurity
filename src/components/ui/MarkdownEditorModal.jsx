@@ -94,7 +94,7 @@ export function MarkdownEditorModal({ isOpen, onClose, onSubmit, type = 'article
             fd.append('image', file);
 
             const token = localStorage.getItem('token');
-            const uploadUrl = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api') + '/upload';
+            const uploadUrl = (import.meta.env.VITE_API_URL || 'https://tusecurity.onrender.com/api') + '/upload';
             const res = await fetch(uploadUrl, {
                 method: 'POST',
                 headers: { 'Authorization': `Bearer ${token}` },

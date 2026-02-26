@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
 // API Configuration - point to real backend
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://tusecurity.onrender.com';
 
 // Helper function for API calls with error handling
 export async function apiCall(endpoint, options = {}) {

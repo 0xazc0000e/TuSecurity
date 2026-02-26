@@ -137,7 +137,7 @@ export default function NewsManagement() {
             // We need a specific upload endpoint for general images
             // Assuming /api/upload exists and handles generic uploads (documented in backend/routes/uploadRoutes.js)
             const token = localStorage.getItem('token');
-            const uploadUrl = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api') + '/upload';
+            const uploadUrl = (import.meta.env.VITE_API_URL || 'https://tusecurity.onrender.com/api') + '/upload';
             const res = await fetch(uploadUrl, {
                 method: 'POST',
                 headers: {

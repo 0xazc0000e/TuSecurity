@@ -4,7 +4,7 @@ import { Upload, ChevronLeft, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { MatrixBackground } from '../components/ui/MatrixBackground';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://tusecurity.onrender.com/api';
 
 const INTERESTS_LIST = [
     "اختبار الاختراق", "محلل مركز العمليات الأمنية (SOC)", "تحليل البرمجيات الخبيثة",

@@ -4,7 +4,7 @@ import { User, Mail, Lock, Shield, ArrowLeft, CheckCircle, AlertCircle } from 'l
 import { useNavigate, Link } from 'react-router-dom';
 import { MatrixBackground } from '../components/ui/MatrixBackground';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://tusecurity.onrender.com/api';
 
 export default function Signup() {
     const navigate = useNavigate();

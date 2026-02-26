@@ -418,7 +418,7 @@ export default function EventsManagement() {
                                                             const fd = new FormData();
                                                             fd.append('image', blob, 'event-cover.jpg');
                                                             try {
-                                                                const uploadUrl = (import.meta.env.VITE_API_URL || 'http://localhost:5000/api') + '/upload';
+                                                                const uploadUrl = (import.meta.env.VITE_API_URL || 'https://tusecurity.onrender.com/api') + '/upload';
                                                                 const token = localStorage.getItem('token');
                                                                 const resp = await fetch(uploadUrl, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` }, body: fd });
                                                                 const data = await resp.json();

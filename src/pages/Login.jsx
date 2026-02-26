@@ -5,7 +5,7 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { MatrixBackground } from '../components/ui/MatrixBackground';
 import { GoogleIcon, MicrosoftIcon } from '../components/ui/SocialIcons.jsx';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://tusecurity.onrender.com/api';
 
 export default function Login() {
     const navigate = useNavigate();

@@ -32,26 +32,9 @@ app.use(helmet({
     crossOriginResourcePolicy: { policy: "cross-origin" },
 }));
 
-// تحديث CORS ليسمح باتصال Netlify
-const allowedOrigins = [
-    ...devOrigins,
-    process.env.FRONTEND_URL,
-    'https://tusecurity.netlify.app' // رابط الواجهة الرسمي
-].filter(Boolean);
-
 app.use(cors({
-    origin: function (origin, callback) {
-        if (!origin) return callback(null, true);
-        if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.includes('*')) {
-            callback(null, true);
-        } else {
-            console.warn(`CORS blocked origin: ${origin}`);
-            callback(new Error('Not allowed by CORS'));
-        }
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+    origin: ['http://localhost:3000', 'http://127.0.0.1:5500', 'http://localhost:5500', 'https://tusecurity.netlify.app'],
+    credentials: true
 }));
 
 const generalLimiter = rateLimit({

@@ -4,7 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { apiCall } from '../context/AuthContext';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://tusecurity.onrender.com/api';
 const MEDIA_URL = API_BASE_URL.replace(/\/api\/?$/, '');
 
 export default function ArticleViewer({ article, onBack }) {
