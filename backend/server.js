@@ -7,7 +7,7 @@ const helmet = require('helmet');
 const cookieParser = require('cookie-parser');
 require('dotenv').config();
 
-const { initializeDatabase, seedDatabase } = require('./models/database');
+// تم إزالة استدعاء قاعدة بيانات SQLite القديمة من هنا
 
 // Import routes
 const authRoutes = require('./routes/authRoutes');
@@ -23,37 +23,25 @@ const interactionRoutes = require('./routes/interactionRoutes');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Environment-aware origins
 const isDev = process.env.NODE_ENV !== 'production';
-const devOrigins = isDev ? ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175', 'http://localhost:3000'] : [];
+const devOrigins = isDev ? ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175'] : [];
 
-// Security middleware - Helmet
 app.use(helmet({
-    contentSecurityPolicy: {
-        directives: {
-            defaultSrc: ["'self'"],
-            styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-            fontSrc: ["'self'", "https://fonts.gstatic.com"],
-            scriptSrc: ["'self'", "'unsafe-eval'"], // unsafe-eval needed for some React dev tools/hmr
-            imgSrc: ["'self'", "data:", "http:", "https:"],
-            connectSrc: ["'self'", ...devOrigins, process.env.FRONTEND_URL].filter(Boolean),
-            frameAncestors: ["'none'"], // Prevent clickjacking
-        },
-    },
+    contentSecurityPolicy: false, // لعدم التعارض مع بعض مسارات الـ API
     crossOriginResourcePolicy: { policy: "cross-origin" },
 }));
 
-// CORS middleware - Restricted to known origins
+// تحديث CORS ليسمح باتصال Netlify
 const allowedOrigins = [
     ...devOrigins,
-    process.env.FRONTEND_URL
+    process.env.FRONTEND_URL,
+    'https://tusecurity.netlify.app' // رابط الواجهة الرسمي
 ].filter(Boolean);
 
 app.use(cors({
     origin: function (origin, callback) {
-        // Allow requests with no origin (like mobile apps or curl requests)
         if (!origin) return callback(null, true);
-        if (allowedOrigins.indexOf(origin) !== -1) {
+        if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.includes('*')) {
             callback(null, true);
         } else {
             console.warn(`CORS blocked origin: ${origin}`);
@@ -65,229 +53,98 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
-// Rate Limiting (in-memory, no Redis dependency required)
 const generalLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutes
+    windowMs: 15 * 60 * 1000,
     max: 1000,
     standardHeaders: true,
     legacyHeaders: false,
-    message: {
-        error: 'تم تجاوز الحد المسموح من الطلبات. الرجاء المحاولة لاحقاً.'
-    }
+    message: { error: 'تم تجاوز الحد المسموح من الطلبات. الرجاء المحاولة لاحقاً.' }
 });
 app.use(generalLimiter);
 
-// Strict rate limiting for auth endpoints
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
     max: 100,
     standardHeaders: true,
     legacyHeaders: false,
     skipSuccessfulRequests: true,
-    message: {
-        error: 'تم تجاوز عدد محاولات تسجيل الدخول المسموحة. الرجاء المحاولة بعد ساعة.'
-    }
+    message: { error: 'تم تجاوز عدد محاولات تسجيل الدخول المسموحة. الرجاء المحاولة بعد ساعة.' }
 });
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 
-// Initialize Passport
 const passport = require('./config/socialAuth');
 app.use(passport.initialize());
 
-// Request logging to debug 404s
 app.use((req, res, next) => {
     console.log(`[${new Date().toISOString()}] ${req.method} ${req.path} - IP: ${req.ip}`);
     next();
 });
 
-// Uploads Directory
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
     fs.mkdirSync(uploadsDir, { recursive: true });
-    console.log('Created uploads directory');
 }
 app.use('/uploads', express.static(uploadsDir));
 
-// Database Init
-async function startServer() {
-    try {
-        await initializeDatabase();
-        // await seedDatabase(); // Removed to prevent data loss on restart
-        console.log('Database initialized successfully');
-    } catch (error) {
-        console.error('Database initialization failed:', error);
-        process.exit(1);
-    }
-}
-
 // API Routes Construction
-// Apply strict rate limiting to auth routes
 app.use('/api/auth', authLimiter, authRoutes);
 app.use('/api/admin', adminRoutes);
-
-// LMS Routes (The Engine for Tracks/Modules/Lessons)
 app.use('/api/lms', lmsRoutes);
-
-// News Routes (For News/Articles)
 app.use('/api/news', newsRoutes);
-
-// Legacy Content Routes (Mapped to avoid 404s if legacy calls exist)
 app.use('/api/content', contentRoutes);
-
-// Simulator Routes
 app.use('/api/simulators', simulatorRoutes);
-
-// Upload Routes (Lesson Images)
 app.use('/api/upload', uploadRoutes);
-
-// Events/Surveys/Announcements Routes
 app.use('/api/events', eventsRoutes);
-
-// Interaction Routes (Likes/Bookmarks/XP)
 app.use('/api/interactions', interactionRoutes);
 
-// Dashboard Routes (Aggregated Stats)
 const dashboardRoutes = require('./routes/dashboardRoutes');
 app.use('/api/dashboard', dashboardRoutes);
-
-// User Routes (XP Stats, Learning Progress, Profile Data)
 const userRoutes = require('./routes/userRoutes');
 app.use('/api/user', userRoutes);
-
-// Profile Routes (Comprehensive, for Profile.jsx)
 const profileRoutes = require('./routes/profileRoutes');
 app.use('/api/profile', profileRoutes);
-
-// Saved Items Routes (Bookmarks, Likes, Reading List, Folders)
 const savedItemsRoutes = require('./routes/savedItemsRoutes');
 app.use('/api/user/saved', savedItemsRoutes);
-
-// Notification Routes
 const notificationRoutes = require('./routes/notificationRoutes');
 app.use('/api/notifications', notificationRoutes);
-
-// Badge Routes
 const badgeRoutes = require('./routes/badgeRoutes');
 app.use('/api/badges', badgeRoutes);
-
-// Report Routes (Admin only)
 const reportRoutes = require('./routes/reportRoutes');
 app.use('/api/reports', reportRoutes);
-
-// Distinguished Members Routes
 const distinguishedRoutes = require('./routes/distinguishedRoutes');
 app.use('/api/distinguished', distinguishedRoutes);
 
-// Base Route
+// مسار رئيسي للتأكد من عمل الخادم بدون محاولة استدعاء React
+app.get('/', (req, res) => {
+    res.send('TUCC Backend API is running successfully on Render!');
+});
+
 app.get('/api', (req, res) => {
     res.json({
         name: 'TU Cyber Security Club API',
         version: '2.0.0',
-        status: 'running',
-        documentation: '/api/docs',
-        endpoints: {
-            auth: {
-                base: '/api/auth',
-                routes: ['POST /register', 'POST /login', 'POST /verify-email', 'GET /profile']
-            },
-            user: {
-                base: '/api/user',
-                routes: [
-                    'GET /xp-stats', 'GET /xp-detailed-stats',
-                    'GET /learning-progress', 'GET /learning-stats',
-                    'POST /lesson-access', 'POST /complete-lesson',
-                    'GET /streak'
-                ]
-            },
-            saved: {
-                base: '/api/user/saved',
-                routes: ['GET /items', 'POST /bookmarks', 'DELETE /bookmarks/:id']
-            },
-            profile: {
-                base: '/api/profile',
-                routes: ['GET /', 'PUT /update', 'PUT /avatar']
-            },
-            badges: {
-                base: '/api/badges',
-                routes: ['GET /', 'GET /my-badges', 'GET /progress', 'POST /check', 'POST / (admin)']
-            },
-            reports: {
-                base: '/api/reports',
-                routes: ['GET /dashboard', 'GET /activity', 'GET /top-users', 'GET /content-performance', 'GET /engagement', 'GET /system-health', 'GET /full']
-            },
-            notifications: {
-                base: '/api/notifications',
-                routes: ['GET /', 'PUT /:id/read', 'PUT /read-all', 'DELETE /:id']
-            },
-            lms: {
-                base: '/api/lms',
-                routes: ['GET /tracks', 'GET /courses/:trackId', 'GET /units/:courseId', 'GET /lessons/:unitId']
-            },
-            simulators: {
-                base: '/api/simulators',
-                routes: ['GET /', 'GET /:id', 'POST /:id/complete']
-            },
-            events: {
-                base: '/api/events',
-                routes: ['GET /', 'POST /:id/register']
-            },
-            interactions: {
-                base: '/api/interactions',
-                routes: ['POST /like', 'POST /bookmark', 'DELETE /like', 'DELETE /bookmark']
-            },
-            admin: {
-                base: '/api/admin',
-                routes: ['GET /dashboard', 'GET /users', 'GET /stats']
-            },
-            uploads: {
-                base: '/api/upload',
-                routes: ['POST /image', 'POST /avatar']
-            }
-        }
+        status: 'running'
     });
 });
 
-// Serve Frontend in Production
-if (process.env.NODE_ENV === 'production') {
-    const frontendDist = path.join(__dirname, '..', 'dist');
-    app.use(express.static(frontendDist));
+app.use((req, res) => {
+    res.status(404).json({ error: 'Endpoint not found' });
+});
 
-    // Catch-all route to serve React app
-    app.get('*', (req, res) => {
-        // Prevent API 404s from returning index.html
-        if (req.path.startsWith('/api/') || req.path.startsWith('/uploads/')) {
-            res.status(404).json({ error: 'Endpoint not found' });
-        } else {
-            res.sendFile(path.join(frontendDist, 'index.html'));
-        }
-    });
-} else {
-    // 404 Handler for Development
-    app.use((req, res) => {
-        console.log(`404 Not Found: ${req.method} ${req.path}`);
-        res.status(404).json({ error: 'Endpoint not found' });
-    });
-}
-
-// Error Handler
 app.use((err, req, res, next) => {
     console.error('Server error:', err);
     res.status(500).json({ error: err.message || 'Internal Server Error' });
 });
 
-// Start Server
-startServer().then(() => {
-    app.listen(PORT, () => {
-        console.log(`=================================`);
-        console.log(`TUCC Backend Server Running`);
-        console.log(`=================================`);
-        console.log(`Port: ${PORT}`);
-        console.log(`API Base: http://localhost:${PORT}/api`);
-        console.log(`=================================`);
-    });
+app.listen(PORT, () => {
+    console.log(`=================================`);
+    console.log(`TUCC Backend Server Running`);
+    console.log(`=================================`);
+    console.log(`Port: ${PORT}`);
+    console.log(`=================================`);
 });
 
 module.exports = app;

@@ -1,35 +1,24 @@
-const { db } = require('../models/database');
+const { prisma } = require('../models/prismaDatabase');
 
 // Get all notifications for a user
 const getNotifications = async (req, res) => {
     try {
-        const userId = req.userId;
+        const userId = req.userId || req.user?.id;
 
-        const notifications = await new Promise((resolve, reject) => {
-            db.all(
-                `SELECT * FROM notifications 
-                 WHERE user_id = ? 
-                 ORDER BY created_at DESC 
-                 LIMIT 50`,
-                [userId],
-                (err, rows) => {
-                    if (err) reject(err);
-                    else resolve(rows || []);
-                }
-            );
-        });
+        if (!userId) {
+            return res.status(401).json({ success: false, error: 'Unauthorized' });
+        }
 
-        // Get unread count
-        const unreadCount = await new Promise((resolve, reject) => {
-            db.get(
-                `SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = 0`,
-                [userId],
-                (err, row) => {
-                    if (err) reject(err);
-                    else resolve(row?.count || 0);
-                }
-            );
-        });
+        const [notifications, unreadCount] = await Promise.all([
+            prisma.notifications.findMany({
+                where: { user_id: userId },
+                orderBy: { created_at: 'desc' },
+                take: 50
+            }),
+            prisma.notifications.count({
+                where: { user_id: userId, is_read: false }
+            })
+        ]);
 
         res.json({
             success: true,
@@ -45,22 +34,22 @@ const getNotifications = async (req, res) => {
 // Mark notification as read
 const markAsRead = async (req, res) => {
     try {
-        const userId = req.userId;
+        const userId = req.userId || req.user?.id;
         const { notificationId } = req.params;
 
-        await new Promise((resolve, reject) => {
-            db.run(
-                `UPDATE notifications SET is_read = 1 WHERE id = ? AND user_id = ?`,
-                [notificationId, userId],
-                function(err) {
-                    if (err) reject(err);
-                    else resolve();
-                }
-            );
+        await prisma.notifications.update({
+            where: {
+                id: parseInt(notificationId),
+                user_id: userId
+            },
+            data: { is_read: true }
         });
 
         res.json({ success: true, message: 'Notification marked as read' });
     } catch (error) {
+        if (error.code === 'P2025') {
+            return res.status(404).json({ success: false, error: 'Notification not found' });
+        }
         console.error('Error marking notification as read:', error);
         res.status(500).json({ success: false, error: 'Failed to mark notification as read' });
     }
@@ -69,17 +58,11 @@ const markAsRead = async (req, res) => {
 // Mark all notifications as read
 const markAllAsRead = async (req, res) => {
     try {
-        const userId = req.userId;
+        const userId = req.userId || req.user?.id;
 
-        await new Promise((resolve, reject) => {
-            db.run(
-                `UPDATE notifications SET is_read = 1 WHERE user_id = ? AND is_read = 0`,
-                [userId],
-                function(err) {
-                    if (err) reject(err);
-                    else resolve();
-                }
-            );
+        await prisma.notifications.updateMany({
+            where: { user_id: userId, is_read: false },
+            data: { is_read: true }
         });
 
         res.json({ success: true, message: 'All notifications marked as read' });
@@ -92,16 +75,16 @@ const markAllAsRead = async (req, res) => {
 // Create notification (internal use)
 const createNotification = async (userId, title, message, type = 'general', link = null) => {
     try {
-        await new Promise((resolve, reject) => {
-            db.run(
-                `INSERT INTO notifications (user_id, title, message, type, link, created_at) 
-                 VALUES (?, ?, ?, ?, ?, datetime('now'))`,
-                [userId, title, message, type, link],
-                function(err) {
-                    if (err) reject(err);
-                    else resolve();
-                }
-            );
+        await prisma.notifications.create({
+            data: {
+                user_id: userId,
+                title,
+                message,
+                type,
+                link,
+                created_at: new Date(),
+                is_read: false
+            }
         });
         return true;
     } catch (error) {
@@ -113,22 +96,21 @@ const createNotification = async (userId, title, message, type = 'general', link
 // Delete notification
 const deleteNotification = async (req, res) => {
     try {
-        const userId = req.userId;
+        const userId = req.userId || req.user?.id;
         const { notificationId } = req.params;
 
-        await new Promise((resolve, reject) => {
-            db.run(
-                `DELETE FROM notifications WHERE id = ? AND user_id = ?`,
-                [notificationId, userId],
-                function(err) {
-                    if (err) reject(err);
-                    else resolve();
-                }
-            );
+        await prisma.notifications.delete({
+            where: {
+                id: parseInt(notificationId),
+                user_id: userId
+            }
         });
 
         res.json({ success: true, message: 'Notification deleted' });
     } catch (error) {
+        if (error.code === 'P2025') {
+            return res.status(404).json({ success: false, error: 'Notification not found' });
+        }
         console.error('Error deleting notification:', error);
         res.status(500).json({ success: false, error: 'Failed to delete notification' });
     }

@@ -1,43 +1,75 @@
-const { db } = require('../models/database');
+const { prisma } = require('../models/prismaDatabase');
 
-const getAllNews = (req, res) => {
-    const { limit = 50, type } = req.query;
-    let query = 'SELECT * FROM news';
-    let params = [];
+const getAllNews = async (req, res) => {
+    try {
+        const { limit = 50, type } = req.query;
 
-    if (type) {
-        query += ' WHERE type = ?';
-        params.push(type);
-    }
-
-    query += ' ORDER BY created_at DESC LIMIT ?';
-    params.push(limit);
-
-    db.all(query, params, (err, rows) => {
-        if (err) {
-            console.error('Get news error:', err);
-            return res.status(500).json({ error: 'Failed to fetch news' });
+        const where = {};
+        if (type) {
+            where.type = type;
         }
-        res.json(rows);
-    });
+
+        const news = await prisma.news.findMany({
+            where,
+            orderBy: {
+                created_at: 'desc'
+            },
+            take: parseInt(limit)
+        });
+
+        res.json(news);
+    } catch (err) {
+        console.error('Get news error:', err);
+        return res.status(500).json({ error: 'Failed to fetch news' });
+    }
 };
 
 const getLatestUpdates = async (req, res) => {
-    const safeGet = (sql, params = []) => new Promise((resolve) => {
-        db.get(sql, params, (err, row) => {
-            if (err) { console.error('[getLatestUpdates] SQL error:', err.message); resolve(null); }
-            else resolve(row || null);
-        });
-    });
-
     try {
         const [latestEvent, latestSurvey, latestNews] = await Promise.all([
-            safeGet('SELECT id, title, description, category as type_tag, "event" as type, created_at FROM club_events ORDER BY created_at DESC LIMIT 1'),
-            safeGet('SELECT id, title, description, type as type_tag, "survey" as type, created_at FROM club_surveys ORDER BY created_at DESC LIMIT 1'),
-            safeGet('SELECT id, title, body as description, image_url as image, "news" as type, created_at FROM news ORDER BY created_at DESC LIMIT 1'),
+            prisma.club_events.findFirst({
+                select: { id: true, title: true, description: true, category: true, created_at: true },
+                orderBy: { created_at: 'desc' }
+            }),
+            prisma.club_surveys.findFirst({
+                select: { id: true, title: true, description: true, type: true, created_at: true },
+                orderBy: { created_at: 'desc' }
+            }),
+            prisma.news.findFirst({
+                select: { id: true, title: true, body: true, image_url: true, type: true, created_at: true },
+                orderBy: { created_at: 'desc' }
+            }),
         ]);
 
-        const latestUpdates = [latestEvent, latestSurvey, latestNews].filter(Boolean);
+        const latestUpdates = [];
+
+        if (latestEvent) {
+            latestUpdates.push({
+                ...latestEvent,
+                type_tag: latestEvent.category,
+                type: 'event'
+            });
+        }
+
+        if (latestSurvey) {
+            latestUpdates.push({
+                ...latestSurvey,
+                type_tag: latestSurvey.type,
+                type: 'survey'
+            });
+        }
+
+        if (latestNews) {
+            latestUpdates.push({
+                id: latestNews.id,
+                title: latestNews.title,
+                description: latestNews.body,
+                image: latestNews.image_url,
+                type: 'news',
+                created_at: latestNews.created_at
+            });
+        }
+
         res.json({ success: true, latest: latestUpdates });
     } catch (error) {
         console.error('Error fetching latest updates:', error);
@@ -45,68 +77,95 @@ const getLatestUpdates = async (req, res) => {
     }
 };
 
-const getNewsById = (req, res) => {
-    const { id } = req.params;
-    db.get('SELECT * FROM news WHERE id = ?', [id], (err, row) => {
-        if (err) return res.status(500).json({ error: err.message });
+const getNewsById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const row = await prisma.news.findUnique({
+            where: { id: parseInt(id) }
+        });
+
         if (!row) return res.status(404).json({ error: 'News not found' });
         res.json(row);
-    });
+    } catch (err) {
+        console.error('Get news by ID error:', err);
+        res.status(500).json({ error: err.message });
+    }
 };
 
-const createNews = (req, res) => {
-    const { title, body, tags, type } = req.body;
+const createNews = async (req, res) => {
+    try {
+        const { title, body, tags, type } = req.body;
+        const image_url = req.file ? `/uploads/${req.file.filename}` : req.body.image_url;
 
-    // Check if file uploaded via multer
-    const image_url = req.file ? `/uploads/${req.file.filename}` : req.body.image_url;
+        if (!title || !body) return res.status(400).json({ error: 'Title and Body are required' });
 
-    if (!title || !body) return res.status(400).json({ error: 'Title and Body are required' });
+        const news = await prisma.news.create({
+            data: {
+                title,
+                body,
+                image_url,
+                tags,
+                type: type || 'news'
+            }
+        });
 
-    db.run(
-        'INSERT INTO news (title, body, image_url, tags, type) VALUES (?, ?, ?, ?, ?)',
-        [title, body, image_url, tags, type || 'news'],
-        function (err) {
-            if (err) return res.status(500).json({ error: err.message });
-            res.status(201).json({ id: this.lastID, title, image_url });
+        res.status(201).json({ id: news.id, title, image_url });
+    } catch (err) {
+        console.error('Create news error:', err);
+        res.status(500).json({ error: err.message });
+    }
+};
+
+const updateNews = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { title, body, tags, type } = req.body;
+        let image_url = req.body.image_url;
+
+        if (req.file) {
+            image_url = `/uploads/${req.file.filename}`;
         }
-    );
-};
 
-const updateNews = (req, res) => {
-    const { id } = req.params;
-    const { title, body, tags, type } = req.body;
-    let image_url = req.body.image_url;
+        const data = {
+            title,
+            body,
+            tags,
+            type: type || 'news'
+        };
 
-    // If new file uploaded, use it
-    if (req.file) {
-        image_url = `/uploads/${req.file.filename}`;
-    }
+        if (image_url) {
+            data.image_url = image_url;
+        }
 
-    let query = 'UPDATE news SET title = ?, body = ?, tags = ?, type = ?';
-    let params = [title, body, tags, type || 'news'];
+        const updatedNews = await prisma.news.update({
+            where: { id: parseInt(id) },
+            data
+        });
 
-    if (image_url) {
-        query += ', image_url = ?';
-        params.push(image_url);
-    }
-
-    query += ' WHERE id = ?';
-    params.push(id);
-
-    db.run(query, params, function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        if (this.changes === 0) return res.status(404).json({ error: 'News not found' });
         res.json({ message: 'News updated' });
-    });
+    } catch (err) {
+        if (err.code === 'P2025') {
+            return res.status(404).json({ error: 'News not found' });
+        }
+        console.error('Update news error:', err);
+        res.status(500).json({ error: err.message });
+    }
 };
 
-const deleteNews = (req, res) => {
-    const { id } = req.params;
-    db.run('DELETE FROM news WHERE id = ?', [id], function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        if (this.changes === 0) return res.status(404).json({ error: 'News not found' });
+const deleteNews = async (req, res) => {
+    try {
+        const { id } = req.params;
+        await prisma.news.delete({
+            where: { id: parseInt(id) }
+        });
         res.json({ message: 'News deleted' });
-    });
+    } catch (err) {
+        if (err.code === 'P2025') {
+            return res.status(404).json({ error: 'News not found' });
+        }
+        console.error('Delete news error:', err);
+        res.status(500).json({ error: err.message });
+    }
 };
 
 module.exports = {

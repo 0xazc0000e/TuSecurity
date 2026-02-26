@@ -1,350 +1,358 @@
-const { db } = require('../models/database');
+const { prisma } = require('../models/prismaDatabase');
 
 // Content Management
 
-const getAllContent = (req, res) => {
-    const { type, category } = req.query;
-    let query = 'SELECT * FROM content';
-    let params = [];
+const getAllContent = async (req, res) => {
+    try {
+        const { type, category } = req.query;
+        const where = {};
+        if (type) where.type = type;
+        if (category) where.category = category;
 
-    if (type) {
-        query += ' WHERE type = ?';
-        params.push(type);
-    }
-
-    if (category) {
-        query += type ? ' AND category = ?' : ' WHERE category = ?';
-        params.push(category);
-    }
-
-    query += ' ORDER BY created_at DESC';
-
-    db.all(query, params, (err, rows) => {
-        if (err) {
-            console.error('Get content error:', err);
-            return res.status(500).json({ error: 'Failed to fetch content' });
-        }
+        const rows = await prisma.content.findMany({
+            where,
+            orderBy: { created_at: 'desc' }
+        });
         res.json(rows);
-    });
+    } catch (err) {
+        console.error('Get content error:', err);
+        res.status(500).json({ error: 'Failed to fetch content' });
+    }
 };
 
-const createContent = (req, res) => {
-    console.log('Create Content Request Body:', req.body);
-    console.log('Create Content File:', req.file);
-
-    const { title, body, content: bodyAlt, type, category, image_url } = req.body;
-
-    // Accept either 'body' or 'content' from frontend
-    const bodyText = body || bodyAlt;
-
-    // Construct Image URL
-    // If a file is uploaded via multer, req.file will be populated.
-    // If usage of image_url string is allowed (e.g. external link), we use that as fallback.
-    const thumbUrl = req.file ? `/uploads/${req.file.filename}` : (image_url || null);
-
-    if (!title || !bodyText) {
-        return res.status(400).json({ error: 'Title and body are required' });
+const getContentById = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const row = await prisma.content.findUnique({
+            where: { id: parseInt(id) }
+        });
+        if (!row) return res.status(404).json({ error: 'Content not found' });
+        res.json(row);
+    } catch (err) {
+        console.error('Get content by ID error:', err);
+        res.status(500).json({ error: 'Failed to fetch content' });
     }
+};
 
-    // Default to 'news' if type is missing
-    const contentType = type || 'news';
+const createContent = async (req, res) => {
+    try {
+        const { title, body, content: bodyAlt, type, category, image_url } = req.body;
+        const bodyText = body || bodyAlt;
+        const thumbUrl = req.file ? `/uploads/${req.file.filename}` : (image_url || null);
 
-    db.run(
-        `INSERT INTO content (title, body, type, category, thumbnail, author, status) 
-         VALUES (?, ?, ?, ?, ?, ?, 'published')`,
-        [title, bodyText, contentType, category || 'general', thumbUrl, req.user?.username || 'Admin'],
-        function (err) {
-            if (err) {
-                console.error('Create content error:', err);
-                return res.status(500).json({ error: 'Failed to create content' });
-            }
+        if (!title || !bodyText) {
+            return res.status(400).json({ error: 'Title and body are required' });
+        }
 
-            const contentId = this.lastID;
-
-            // Log the action
-            db.run(
-                `INSERT INTO logs (user_id, action, resource_type, resource_id, details, ip_address) 
-                 VALUES (?, ?, 'content', ?, ?, ?)`,
-                [req.user?.id || 0, 'CONTENT_CREATED', contentId, `Created ${contentType}: ${title}`, req.ip || 'unknown']
-            );
-
-            res.status(201).json({
-                message: 'Content created successfully',
-                id: contentId,
-                thumbnail: thumbUrl,
-                // Return matched fields for frontend convenience
+        const contentType = type || 'news';
+        const content = await prisma.content.create({
+            data: {
                 title,
                 body: bodyText,
-                type: contentType
-            });
-        }
-    );
-};
+                type: contentType,
+                category: category || 'general',
+                thumbnail: thumbUrl,
+                author: req.user?.username || 'Admin',
+                status: 'published'
+            }
+        });
 
-const updateContent = (req, res) => {
-    const { id } = req.params;
-    const { title, body, content: bodyAlt, category, image_url } = req.body;
+        await prisma.logs.create({
+            data: {
+                user_id: req.user?.id || 0,
+                action: 'CONTENT_CREATED',
+                resource_type: 'content',
+                resource_id: content.id,
+                details: `Created ${contentType}: ${title}`,
+                ip_address: req.ip || 'unknown'
+            }
+        });
 
-    const bodyText = body || bodyAlt;
-    // If a new file is uploaded, use it. Otherwise use the provided image_url (which might be the existing one)
-    let thumbUrl = req.file ? `/uploads/${req.file.filename}` : (image_url || null);
-
-    // Construct the SQL query dynamically based on whether thumbnail is being updated
-    let query = `UPDATE content SET title = ?, body = ?, category = ?, date_published = CURRENT_TIMESTAMP`;
-    let params = [title, bodyText, category || 'general'];
-
-    if (thumbUrl) {
-        query += `, thumbnail = ?`;
-        params.push(thumbUrl);
+        res.status(201).json({
+            message: 'Content created successfully',
+            id: content.id,
+            thumbnail: thumbUrl,
+            title,
+            body: bodyText,
+            type: contentType
+        });
+    } catch (err) {
+        console.error('Create content error:', err);
+        res.status(500).json({ error: 'Failed to create content' });
     }
-
-    query += ` WHERE id = ?`;
-    params.push(id);
-
-    db.run(
-        query,
-        params,
-        function (err) {
-            if (err) {
-                console.error('Update content error:', err);
-                return res.status(500).json({ error: 'Failed to update content' });
-            }
-
-            if (this.changes === 0) {
-                return res.status(404).json({ error: 'Content not found' });
-            }
-
-            // Log the action
-            db.run(
-                `INSERT INTO logs (user_id, action, resource_type, resource_id, details, ip_address) 
-                 VALUES (?, ?, 'content', ?, ?, ?)`,
-                [req.user?.id || 0, 'CONTENT_UPDATED', id, `Updated: ${title}`, req.ip || 'unknown']
-            );
-
-            res.json({ message: 'Content updated successfully', thumbnail: thumbUrl });
-        }
-    );
 };
 
-const deleteContent = (req, res) => {
-    const { id } = req.params;
+const updateContent = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { title, body, content: bodyAlt, category, image_url, status } = req.body;
+        const bodyText = body || bodyAlt;
+        let thumbUrl = req.file ? `/uploads/${req.file.filename}` : (image_url || null);
 
-    db.run('DELETE FROM content WHERE id = ?', [id], function (err) {
-        if (err) {
-            console.error('Delete content error:', err);
-            return res.status(500).json({ error: 'Failed to delete content' });
-        }
+        const data = {
+            title,
+            body: bodyText,
+            category: category || 'general',
+            date_published: new Date(),
+            status: status || 'published'
+        };
+        if (thumbUrl) data.thumbnail = thumbUrl;
 
-        if (this.changes === 0) {
-            return res.status(404).json({ error: 'Content not found' });
-        }
+        await prisma.content.update({
+            where: { id: parseInt(id) },
+            data
+        });
 
-        // Log the action
-        db.run(
-            `INSERT INTO logs (user_id, action, resource_type, resource_id, details, ip_address) 
-             VALUES (?, ?, 'content', ?, ?, ?)`,
-            [req.user?.id || 0, 'CONTENT_DELETED', id, 'Content deleted', req.ip || 'unknown']
-        );
+        await prisma.logs.create({
+            data: {
+                user_id: req.user?.id || 0,
+                action: 'CONTENT_UPDATED',
+                resource_type: 'content',
+                resource_id: parseInt(id),
+                details: `Updated: ${title}`,
+                ip_address: req.ip || 'unknown'
+            }
+        });
+
+        res.json({ message: 'Content updated successfully', id: parseInt(id) });
+    } catch (err) {
+        console.error('Update content error:', err);
+        if (err.code === 'P2025') return res.status(404).json({ error: 'Content not found' });
+        res.status(500).json({ error: 'Failed to update content' });
+    }
+};
+
+const deleteContent = async (req, res) => {
+    try {
+        const { id } = req.params;
+        await prisma.content.delete({
+            where: { id: parseInt(id) }
+        });
+
+        await prisma.logs.create({
+            data: {
+                user_id: req.user?.id || 0,
+                action: 'CONTENT_DELETED',
+                resource_type: 'content',
+                resource_id: parseInt(id),
+                details: 'Content deleted',
+                ip_address: req.ip || 'unknown'
+            }
+        });
 
         res.json({ message: 'Content deleted successfully' });
-    });
+    } catch (err) {
+        console.error('Delete content error:', err);
+        if (err.code === 'P2025') return res.status(404).json({ error: 'Content not found' });
+        res.status(500).json({ error: 'Failed to delete content' });
+    }
 };
 
 // Simulator & Scenario Management
 
-const getAllSimulators = (req, res) => {
-    db.all('SELECT * FROM simulators ORDER BY created_at DESC', [], (err, rows) => {
-        if (err) {
-            console.error('Get simulators error:', err);
-            return res.status(500).json({ error: 'Failed to fetch simulators' });
-        }
+const getAllSimulators = async (req, res) => {
+    try {
+        const rows = await prisma.simulators.findMany({
+            orderBy: { created_at: 'desc' }
+        });
         res.json(rows);
-    });
-};
-
-const createSimulator = (req, res) => {
-    // Legacy support for simulator creating, though we are moving to scenarios.
-    const { title, description, type, difficulty, category } = req.body;
-
-    if (!title || !type || !difficulty) {
-        return res.status(400).json({ error: 'Title, type, and difficulty are required' });
+    } catch (err) {
+        console.error('Get simulators error:', err);
+        res.status(500).json({ error: 'Failed to fetch simulators' });
     }
-
-    db.run(
-        `INSERT INTO simulators (title, description, type, difficulty, category) 
-         VALUES (?, ?, ?, ?, ?)`,
-        [title, description || '', type, difficulty, category || 'general'],
-        function (err) {
-            if (err) {
-                console.error('Create simulator error:', err);
-                return res.status(500).json({ error: 'Failed to create simulator' });
-            }
-
-            const simulatorId = this.lastID;
-
-            // Log the action
-            db.run(
-                `INSERT INTO logs (user_id, action, resource_type, resource_id, details, ip_address) 
-                 VALUES (?, ?, 'simulator', ?, ?, ?)`,
-                [req.user?.id || 0, 'SIMULATOR_CREATED', simulatorId, `Created: ${title}`, req.ip || 'unknown']
-            );
-
-            res.status(201).json({
-                message: 'Simulator created successfully',
-                id: simulatorId
-            });
-        }
-    );
 };
 
-const updateSimulator = (req, res) => {
-    const { id } = req.params;
-    const { title, description, difficulty, category } = req.body;
-
-    db.run(
-        `UPDATE simulators 
-         SET title = ?, description = ?, difficulty = ?, category = ? 
-         WHERE id = ?`,
-        [title, description, difficulty, category, id],
-        function (err) {
-            if (err) {
-                console.error('Update simulator error:', err);
-                return res.status(500).json({ error: 'Failed to update simulator' });
-            }
-
-            if (this.changes === 0) {
-                return res.status(404).json({ error: 'Simulator not found' });
-            }
-
-            res.json({ message: 'Simulator updated successfully' });
+const createSimulator = async (req, res) => {
+    try {
+        const { title, description, type, difficulty, category, icon, xp_reward, lessons_count } = req.body;
+        if (!title || !type || !difficulty) {
+            return res.status(400).json({ error: 'Title, type, and difficulty are required' });
         }
-    );
+
+        const simulator = await prisma.simulators.create({
+            data: {
+                title,
+                description: description || '',
+                type,
+                difficulty,
+                category: category || 'general',
+                icon: icon || 'Terminal',
+                xp_reward: parseInt(xp_reward) || 0,
+                lessons_count: parseInt(lessons_count) || 0,
+                status: 'active'
+            }
+        });
+
+        await prisma.logs.create({
+            data: {
+                user_id: req.user?.id || 0,
+                action: 'SIMULATOR_CREATED',
+                resource_type: 'simulator',
+                resource_id: simulator.id,
+                details: `Created: ${title}`,
+                ip_address: req.ip || 'unknown'
+            }
+        });
+
+        res.status(201).json({ message: 'Simulator created successfully', id: simulator.id });
+    } catch (err) {
+        console.error('Create simulator error:', err);
+        res.status(500).json({ error: 'Failed to create simulator' });
+    }
 };
 
-const deleteSimulator = (req, res) => {
-    const { id } = req.params;
+const updateSimulator = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { title, description, difficulty, category, icon, status, xp_reward, lessons_count } = req.body;
 
-    db.run('DELETE FROM simulators WHERE id = ?', [id], function (err) {
-        if (err) {
-            console.error('Delete simulator error:', err);
-            return res.status(500).json({ error: 'Failed to delete simulator' });
-        }
+        await prisma.simulators.update({
+            where: { id: parseInt(id) },
+            data: {
+                title,
+                description,
+                difficulty,
+                category,
+                icon,
+                status,
+                xp_reward: xp_reward !== undefined ? parseInt(xp_reward) : undefined,
+                lessons_count: lessons_count !== undefined ? parseInt(lessons_count) : undefined
+            }
+        });
 
-        if (this.changes === 0) {
-            return res.status(404).json({ error: 'Simulator not found' });
-        }
+        res.json({ message: 'Simulator updated successfully' });
+    } catch (err) {
+        console.error('Update simulator error:', err);
+        if (err.code === 'P2025') return res.status(404).json({ error: 'Simulator not found' });
+        res.status(500).json({ error: 'Failed to update simulator' });
+    }
+};
 
+const deleteSimulator = async (req, res) => {
+    try {
+        const { id } = req.params;
+        await prisma.simulators.delete({
+            where: { id: parseInt(id) }
+        });
         res.json({ message: 'Simulator deleted successfully' });
-    });
+    } catch (err) {
+        console.error('Delete simulator error:', err);
+        if (err.code === 'P2025') return res.status(404).json({ error: 'Simulator not found' });
+        res.status(500).json({ error: 'Failed to delete simulator' });
+    }
 };
 
 // --- Scenario Management ---
 
-const getAllScenarios = (req, res) => {
-    const { type } = req.query;
-    let query = 'SELECT * FROM scenarios';
-    let params = [];
+const getAllScenarios = async (req, res) => {
+    try {
+        const { type } = req.query;
+        const where = {};
+        if (type) where.simulator_type = type;
 
-    if (type) {
-        query += ' WHERE simulator_type = ?';
-        params.push(type);
-    }
-
-    query += ' ORDER BY created_at DESC';
-
-    db.all(query, params, (err, rows) => {
-        if (err) {
-            console.error('Get scenarios error:', err);
-            return res.status(500).json({ error: 'Failed to fetch scenarios' });
-        }
+        const rows = await prisma.scenarios.findMany({
+            where,
+            orderBy: { created_at: 'desc' }
+        });
         res.json(rows);
-    });
-};
-
-const createScenario = (req, res) => {
-    const { simulator_type, title, description, objective, expected_answer, hints, xp_reward } = req.body;
-
-    if (!simulator_type || !title || !objective || !expected_answer) {
-        return res.status(400).json({ error: 'Missing required fields' });
+    } catch (err) {
+        console.error('Get scenarios error:', err);
+        res.status(500).json({ error: 'Failed to fetch scenarios' });
     }
-
-    db.run(
-        `INSERT INTO scenarios (simulator_type, title, description, objective, expected_answer, hints, xp_reward)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [simulator_type, title, description || '', objective, expected_answer, JSON.stringify(hints || []), xp_reward || 10],
-        function (err) {
-            if (err) {
-                console.error('Create scenario error:', err);
-                return res.status(500).json({ error: 'Failed to create scenario' });
-            }
-
-            const scenarioId = this.lastID;
-
-            // Log action
-            db.run(
-                `INSERT INTO logs (user_id, action, resource_type, resource_id, details, ip_address) 
-                 VALUES (?, ?, 'scenario', ?, ?, ?)`,
-                [req.user?.id || 0, 'SCENARIO_CREATED', scenarioId, `Created scenario: ${title}`, req.ip || 'unknown']
-            );
-
-            res.status(201).json({
-                message: 'Scenario created successfully',
-                id: scenarioId
-            });
-        }
-    );
 };
 
-const updateScenario = (req, res) => {
-    const { id } = req.params;
-    const { simulator_type, title, description, objective, expected_answer, hints, xp_reward } = req.body;
-
-    db.run(
-        `UPDATE scenarios 
-         SET simulator_type = ?, title = ?, description = ?, objective = ?, expected_answer = ?, hints = ?, xp_reward = ?
-         WHERE id = ?`,
-        [simulator_type, title, description, objective, expected_answer, JSON.stringify(hints || []), xp_reward, id],
-        function (err) {
-            if (err) {
-                console.error('Update scenario error:', err);
-                return res.status(500).json({ error: 'Failed to update scenario' });
-            }
-
-            if (this.changes === 0) {
-                return res.status(404).json({ error: 'Scenario not found' });
-            }
-
-            res.json({ message: 'Scenario updated successfully' });
+const createScenario = async (req, res) => {
+    try {
+        const { simulator_type, title, description, objective, expected_answer, hints, xp_reward } = req.body;
+        if (!simulator_type || !title || !objective || !expected_answer) {
+            return res.status(400).json({ error: 'Missing required fields' });
         }
-    );
+
+        const scenario = await prisma.scenarios.create({
+            data: {
+                simulator_type,
+                title,
+                description: description || '',
+                objective,
+                expected_answer,
+                hints: typeof hints === 'string' ? hints : JSON.stringify(hints || []),
+                xp_reward: parseInt(xp_reward) || 10
+            }
+        });
+
+        await prisma.logs.create({
+            data: {
+                user_id: req.user?.id || 0,
+                action: 'SCENARIO_CREATED',
+                resource_type: 'scenario',
+                resource_id: scenario.id,
+                details: `Created scenario: ${title}`,
+                ip_address: req.ip || 'unknown'
+            }
+        });
+
+        res.status(201).json({ message: 'Scenario created successfully', id: scenario.id });
+    } catch (err) {
+        console.error('Create scenario error:', err);
+        res.status(500).json({ error: 'Failed to create scenario' });
+    }
 };
 
-const deleteScenario = (req, res) => {
-    const { id } = req.params;
+const updateScenario = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { simulator_type, title, description, objective, expected_answer, hints, xp_reward } = req.body;
 
-    db.run('DELETE FROM scenarios WHERE id = ?', [id], function (err) {
-        if (err) {
-            console.error('Delete scenario error:', err);
-            return res.status(500).json({ error: 'Failed to delete scenario' });
-        }
+        await prisma.scenarios.update({
+            where: { id: parseInt(id) },
+            data: {
+                simulator_type,
+                title,
+                description,
+                objective,
+                expected_answer,
+                hints: typeof hints === 'string' ? hints : JSON.stringify(hints || []),
+                xp_reward: parseInt(xp_reward)
+            }
+        });
 
-        if (this.changes === 0) {
-            return res.status(404).json({ error: 'Scenario not found' });
-        }
+        res.json({ message: 'Scenario updated successfully' });
+    } catch (err) {
+        console.error('Update scenario error:', err);
+        if (err.code === 'P2025') return res.status(404).json({ error: 'Scenario not found' });
+        res.status(500).json({ error: 'Failed to update scenario' });
+    }
+};
 
-        // Log action
-        db.run(
-            `INSERT INTO logs (user_id, action, resource_type, resource_id, details, ip_address) 
-             VALUES (?, ?, 'scenario', ?, ?, ?)`,
-            [req.user?.id || 0, 'SCENARIO_DELETED', id, 'Scenario deleted', req.ip || 'unknown']
-        );
+const deleteScenario = async (req, res) => {
+    try {
+        const { id } = req.params;
+        await prisma.scenarios.delete({
+            where: { id: parseInt(id) }
+        });
+
+        await prisma.logs.create({
+            data: {
+                user_id: req.user?.id || 0,
+                action: 'SCENARIO_DELETED',
+                resource_type: 'scenario',
+                resource_id: parseInt(id),
+                details: 'Scenario deleted',
+                ip_address: req.ip || 'unknown'
+            }
+        });
 
         res.json({ message: 'Scenario deleted successfully' });
-    });
+    } catch (err) {
+        console.error('Delete scenario error:', err);
+        if (err.code === 'P2025') return res.status(404).json({ error: 'Scenario not found' });
+        res.status(500).json({ error: 'Failed to delete scenario' });
+    }
 };
 
 module.exports = {
     getAllContent,
+    getContentById,
     createContent,
     updateContent,
     deleteContent,

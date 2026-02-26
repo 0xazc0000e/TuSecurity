@@ -1,4 +1,4 @@
-const { db } = require('../models/database');
+const { prisma } = require('../models/prismaDatabase');
 const { createNotification } = require('../controllers/notificationController');
 
 // Default badges to seed
@@ -81,14 +81,18 @@ const DEFAULT_BADGES = [
 async function seedBadges() {
     try {
         for (const badge of DEFAULT_BADGES) {
-            await new Promise((resolve, reject) => {
-                db.run(`
-                    INSERT OR IGNORE INTO badges (name, description, icon, color, requirement_type, requirement_value, xp_reward)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                `, [badge.name, badge.description, badge.icon, badge.color, badge.requirement_type, badge.requirement_value, badge.xp_reward], (err) => {
-                    if (err) reject(err);
-                    else resolve();
-                });
+            await prisma.badges.upsert({
+                where: { name: badge.name },
+                update: {},
+                create: {
+                    name: badge.name,
+                    description: badge.description,
+                    icon: badge.icon,
+                    color: badge.color,
+                    requirement_type: badge.requirement_type,
+                    requirement_value: badge.requirement_value,
+                    xp_reward: badge.xp_reward
+                }
             });
         }
         console.log('Default badges seeded');
@@ -99,66 +103,69 @@ async function seedBadges() {
 
 // Get all badges
 async function getAllBadges() {
-    return new Promise((resolve, reject) => {
-        db.all('SELECT * FROM badges ORDER BY requirement_value ASC', (err, rows) => {
-            if (err) reject(err);
-            else resolve(rows || []);
+    try {
+        return await prisma.badges.findMany({
+            orderBy: { requirement_value: 'asc' }
         });
-    });
+    } catch (error) {
+        console.error('Error fetching all badges:', error);
+        throw error;
+    }
 }
 
 // Get user's earned badges
 async function getUserBadges(userId) {
-    return new Promise((resolve, reject) => {
-        db.all(`
-            SELECT b.*, ub.earned_at
-            FROM badges b
-            JOIN user_badges ub ON b.id = ub.badge_id
-            WHERE ub.user_id = ?
-            ORDER BY ub.earned_at DESC
-        `, [userId], (err, rows) => {
-            if (err) reject(err);
-            else resolve(rows || []);
+    try {
+        const userBadges = await prisma.user_badges.findMany({
+            where: { user_id: userId },
+            include: { badges: true },
+            orderBy: { earned_at: 'desc' }
         });
-    });
+
+        return userBadges.map(ub => ({
+            ...ub.badges,
+            earned_at: ub.earned_at
+        }));
+    } catch (error) {
+        console.error('Error fetching user badges:', error);
+        throw error;
+    }
 }
 
 // Check and award badges for a user
 async function checkAndAwardBadges(userId) {
     try {
-        // Get user stats
-        const userStats = await new Promise((resolve, reject) => {
-            db.get(`
-                SELECT 
-                    u.total_xp,
-                    (SELECT COUNT(*) FROM lesson_progress WHERE user_id = u.id AND is_completed = 1) as completed_lessons,
-                    (SELECT current_streak FROM user_streaks WHERE user_id = u.id) as streak,
-                    (SELECT COUNT(*) FROM user_activity WHERE user_id = u.id AND activity_type = 'simulator_completed') as completed_simulators,
-                    (SELECT COUNT(*) FROM event_registrations WHERE user_id = u.id) as attended_events
-                FROM users u
-                WHERE u.id = ?
-            `, [userId], (err, row) => {
-                if (err) reject(err);
-                else resolve(row || {});
-            });
-        });
+        // Get user stats directly using Prisma
+        const [totalXp, completedLessons, streak, completedSimulators, attendedEvents] = await Promise.all([
+            prisma.users.findUnique({ where: { id: userId }, select: { total_xp: true } }).then(u => u?.total_xp || 0),
+            prisma.lesson_progress.count({ where: { user_id: userId, is_completed: true } }),
+            prisma.user_streaks.findUnique({ where: { user_id: userId }, select: { current_streak: true } }).then(s => s?.current_streak || 0),
+            prisma.user_activity.count({ where: { user_id: userId, activity_type: 'simulator_completed' } }),
+            prisma.event_registrations.count({ where: { user_id: userId } })
+        ]);
+
+        const userStats = {
+            total_xp: totalXp,
+            completed_lessons: completedLessons,
+            streak: streak,
+            completed_simulators: completedSimulators,
+            attended_events: attendedEvents
+        };
 
         // Get all badges
         const badges = await getAllBadges();
 
         // Get already earned badge IDs
-        const earnedBadges = await new Promise((resolve, reject) => {
-            db.all('SELECT badge_id FROM user_badges WHERE user_id = ?', [userId], (err, rows) => {
-                if (err) reject(err);
-                else resolve((rows || []).map(r => r.badge_id));
-            });
-        });
+        const earnedBadgeIds = await prisma.user_badges.findMany({
+            where: { user_id: userId },
+            select: { badge_id: true }
+        }).then(rows => rows.map(r => r.badge_id).filter(Boolean));
 
         const newlyAwarded = [];
 
         // Check each badge
         for (const badge of badges) {
-            if (earnedBadges.includes(badge.id)) continue;
+            if (earnedBadgeIds.includes(badge.id)) continue;
 
             let requirementMet = false;
             switch (badge.requirement_type) {
@@ -180,51 +187,53 @@ async function checkAndAwardBadges(userId) {
             }
 
             if (requirementMet) {
-                // Award badge
-                await new Promise((resolve, reject) => {
-                    db.run(`
-                        INSERT INTO user_badges (user_id, badge_id, badge_name, earned_at)
-                        VALUES (?, ?, ?, datetime('now'))
-                    `, [userId, badge.id, badge.name], (err) => {
-                        if (err) reject(err);
-                        else resolve();
+                // Award badge using transaction if multiple updates
+                await prisma.$transaction(async (tx) => {
+                    // Award badge
+                    await tx.user_badges.create({
+                        data: {
+                            user_id: userId,
+                            badge_id: badge.id,
+                            badge_name: badge.name,
+                            earned_at: new Date()
+                        }
+                    });
+
+                    // Award XP for badge
+                    if (badge.xp_reward && badge.xp_reward > 0) {
+                        await tx.xp_transactions.create({
+                            data: {
+                                user_id: userId,
+                                xp_amount: badge.xp_reward,
+                                source: 'badge',
+                                description: `Earned badge: ${badge.name}`,
+                                created_at: new Date()
+                            }
+                        });
+
+                        // Update user total XP
+                        await tx.users.update({
+                            where: { id: userId },
+                            data: {
+                                total_xp: { increment: badge.xp_reward }
+                            }
+                        });
+                    }
+
+                    // Record activity
+                    await tx.user_activity.create({
+                        data: {
+                            user_id: userId,
+                            activity_type: 'badge_earned',
+                            description: `Earned ${badge.name} badge`,
+                            xp_earned: badge.xp_reward || 0,
+                            created_at: new Date()
+                        }
                     });
                 });
 
-                // Award XP for badge
-                if (badge.xp_reward > 0) {
-                    await new Promise((resolve, reject) => {
-                        db.run(`
-                            INSERT INTO xp_transactions (user_id, xp_amount, source, description, created_at)
-                            VALUES (?, ?, 'badge', ?, datetime('now'))
-                        `, [userId, badge.xp_reward, `Earned badge: ${badge.name}`], (err) => {
-                            if (err) reject(err);
-                            else resolve();
-                        });
-                    });
-
-                    // Update user total XP
-                    await new Promise((resolve, reject) => {
-                        db.run('UPDATE users SET total_xp = total_xp + ? WHERE id = ?', [badge.xp_reward, userId], (err) => {
-                            if (err) reject(err);
-                            else resolve();
-                        });
-                    });
-                }
-
-                // Record activity
-                await new Promise((resolve, reject) => {
-                    db.run(`
-                        INSERT INTO user_activity (user_id, activity_type, description, xp_earned, created_at)
-                        VALUES (?, 'badge_earned', ?, ?, datetime('now'))
-                    `, [userId, `Earned ${badge.name} badge`, badge.xp_reward || 0], (err) => {
-                        if (err) reject(err);
-                        else resolve();
-                    });
-                });
-
-                // Create notification
-                await createNotification(userId, `🎉 مبروك!`, `لقد حصلت على وسام ${badge.name}`, 'achievement', null);
+                // Create notification (async, but not in transaction)
+                createNotification(userId, `🎉 مبروك!`, `لقد حصلت على وسام ${badge.name}`, 'achievement', null);
 
                 newlyAwarded.push(badge);
             }

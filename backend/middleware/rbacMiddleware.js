@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const { db } = require('../models/database');
+const { prisma } = require('../models/prismaDatabase');
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -20,7 +20,7 @@ const ROLE_HIERARCHY = {
  * @param {string} requiredRole - Minimum role required
  */
 const checkPermission = (requiredRole) => {
-    return (req, res, next) => {
+    return async (req, res, next) => {
         const token = req.cookies?.token || (req.headers.authorization && req.headers.authorization.startsWith('Bearer ') ? req.headers.authorization.split(' ')[1] : null);
 
         if (!token) {
@@ -30,38 +30,36 @@ const checkPermission = (requiredRole) => {
         try {
             const decoded = jwt.verify(token, JWT_SECRET);
 
-            db.get(
-                'SELECT role FROM users WHERE id = ?',
-                [decoded.id],
-                (err, user) => {
-                    if (err) {
-                        console.error('Permission check error:', err);
-                        return res.status(500).json({ error: 'Internal server error' });
-                    }
+            const user = await prisma.users.findUnique({
+                where: { id: decoded.id },
+                select: { role: true }
+            });
 
-                    if (!user) {
-                        return res.status(401).json({ error: 'User not found' });
-                    }
+            if (!user) {
+                return res.status(401).json({ error: 'User not found' });
+            }
 
-                    const userLevel = ROLE_HIERARCHY[user.role] || 0;
-                    const requiredLevel = ROLE_HIERARCHY[requiredRole] || 0;
+            const userLevel = ROLE_HIERARCHY[user.role] || 0;
+            const requiredLevel = ROLE_HIERARCHY[requiredRole] || 0;
 
-                    if (userLevel < requiredLevel) {
-                        return res.status(403).json({
-                            error: 'Forbidden. Insufficient permissions.',
-                            required: requiredRole,
-                            current: user.role
-                        });
-                    }
+            if (userLevel < requiredLevel) {
+                return res.status(403).json({
+                    error: 'Forbidden. Insufficient permissions.',
+                    required: requiredRole,
+                    current: user.role
+                });
+            }
 
-                    req.userId = decoded.id;
-                    req.userRole = user.role;
-                    req.user = { id: decoded.id, ...user }; // Ensure req.user.id works and includes full user data
-                    next();
-                }
-            );
+            req.userId = decoded.id;
+            req.userRole = user.role;
+            req.user = { id: decoded.id, ...user }; // Ensure req.user.id works and includes full user data
+            next();
         } catch (error) {
-            return res.status(401).json({ error: 'Invalid token' });
+            if (error.name === 'JsonWebTokenError') {
+                return res.status(401).json({ error: 'Invalid token' });
+            }
+            console.error('Permission check error:', error);
+            return res.status(500).json({ error: 'Internal server error' });
         }
     };
 };

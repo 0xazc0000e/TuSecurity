@@ -2,46 +2,45 @@ const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const MicrosoftStrategy = require('passport-microsoft').Strategy;
 const MockStrategy = require('passport-mock-strategy');
-const { db } = require('../models/database');
+const { prisma } = require('../models/prismaDatabase');
 const { generateVerificationCode } = require('../services/emailService');
 
 // Helper to find or create user from social profile
 const findOrCreateUser = async (profile, provider, role = 'student') => {
-    return new Promise((resolve, reject) => {
+    try {
         const email = profile.emails[0].value;
 
         // Check if user exists
-        db.get('SELECT * FROM users WHERE email = ?', [email], async (err, user) => {
-            if (err) return reject(err);
-
-            if (user) {
-                // User exists - update provider ID if needed, or just return user
-                return resolve(user);
-            } else {
-                // Create new user
-                const username = profile.displayName.replace(/\s+/g, '_').toLowerCase() + '_' + Math.floor(Math.random() * 1000);
-
-                // For social login, we mark email as verified since the provider did it
-                db.run(
-                    `INSERT INTO users (full_name, username, email, role, email_verified, created_at, provider) 
-                     VALUES (?, ?, ?, ?, 1, datetime("now"), ?)`,
-                    [profile.displayName, username, email, role, provider],
-                    function (err) {
-                        if (err) return reject(err);
-
-                        // Return the new user object
-                        resolve({
-                            id: this.lastID,
-                            username,
-                            email,
-                            role,
-                            email_verified: 1
-                        });
-                    }
-                );
-            }
+        let user = await prisma.users.findUnique({
+            where: { email }
         });
-    });
+
+        if (user) {
+            // User exists - just return user
+            return user;
+        } else {
+            // Create new user
+            const username = profile.displayName.replace(/\s+/g, '_').toLowerCase() + '_' + Math.floor(Math.random() * 1000);
+
+            // For social login, we mark email as verified since the provider did it
+            const newUser = await prisma.users.create({
+                data: {
+                    full_name: profile.displayName,
+                    username,
+                    email,
+                    role,
+                    email_verified: true,
+                    created_at: new Date(),
+                    provider
+                }
+            });
+
+            return newUser;
+        }
+    } catch (error) {
+        console.error('findOrCreateUser error:', error);
+        throw error;
+    }
 };
 
 // Check if keys are present
@@ -128,10 +127,15 @@ passport.serializeUser((user, done) => {
     done(null, user.id);
 });
 
-passport.deserializeUser((id, done) => {
-    db.get('SELECT * FROM users WHERE id = ?', [id], (err, user) => {
-        done(err, user);
-    });
+passport.deserializeUser(async (id, done) => {
+    try {
+        const user = await prisma.users.findUnique({
+            where: { id: parseInt(id) }
+        });
+        done(null, user);
+    } catch (err) {
+        done(err);
+    }
 });
 
 module.exports = passport;

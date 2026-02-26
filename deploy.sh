@@ -16,7 +16,6 @@ cd backend || { echo -e "${RED}❌ Folder 'backend' not found!${NC}"; exit 1; }
 
 # 1. إعداد رابط قاعدة البيانات في الباك إند
 echo -e "${GREEN}[1/4] Setting up Database URL...${NC}"
-# لاحظ كيف تم استبدال الـ @ بـ %40 في كلمة المرور لتجنب أخطاء الاتصال
 cat <<EOF > .env
 DATABASE_URL="postgresql://postgres:TUCC1447%40tucc2026@db.gyqhonidckxzwtjpofic.supabase.co:5432/postgres"
 EOF
@@ -42,9 +41,10 @@ fi
 echo -e "${GREEN}[4/4] Committing and Pushing to GitHub...${NC}"
 cd .. # العودة للمجلد الرئيسي للمشروع
 git add .
-git commit -m "Auto-deploy: Linked Supabase, fixed Prisma schema, and pushed db successfully"
+git commit -m "Auto-deploy: Final migration to PostgreSQL and Prisma"
 git push origin main
 
 echo -e "${BLUE}=======================================${NC}"
 echo -e "${GREEN} 🎉 All tasks completed successfully! 🎉 ${NC}"
-echo -e "${BLUE
+echo -e "${BLUE}=======================================${NC}"
+

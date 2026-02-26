@@ -1,5 +1,5 @@
 const express = require('express');
-const { db } = require('../models/database');
+const { prisma } = require('../models/prismaDatabase');
 const multer = require('multer');
 const path = require('path');
 const lmsController = require('../controllers/lmsController');
@@ -32,7 +32,6 @@ const upload = multer({
 router.post('/enroll', requireAuth, lmsController.enrollUser);
 
 // Lesson Completion
-// Lesson Completion
 router.get('/lessons/completed', requireAuth, lmsController.getCompletedLessons);
 router.post('/lessons/:id/complete', requireAuth, lmsController.completeLesson);
 
@@ -45,64 +44,89 @@ router.post('/flag/submit', requireAuth, lmsController.submitFlag);
 // ═══════════════════════════════════════════════════════════
 //  ARTICLES — CRUD
 // ═══════════════════════════════════════════════════════════
-router.get('/articles', (req, res) => {
-    db.all(`SELECT * FROM articles ORDER BY created_at DESC`, [], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
+router.get('/articles', async (req, res) => {
+    try {
+        const rows = await prisma.articles.findMany({
+            orderBy: { created_at: 'desc' }
+        });
         res.json(rows || []);
-    });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
-router.get('/articles/:id', (req, res) => {
-    db.get(`SELECT * FROM articles WHERE id = ?`, [req.params.id], (err, row) => {
-        if (err) return res.status(500).json({ error: err.message });
+router.get('/articles/:id', async (req, res) => {
+    try {
+        const row = await prisma.articles.findUnique({
+            where: { id: parseInt(req.params.id) }
+        });
         if (!row) return res.status(404).json({ error: 'Not found' });
         res.json(row);
-    });
-});
-
-router.post('/articles', requireAuth, requireEditor, upload.single('cover_image'), (req, res) => {
-    const { title, content, description, author, cover_image: coverImageAlt, tags, read_time } = req.body;
-
-    // Handle file upload or string URL
-    const imagePath = req.file ? `/uploads/${req.file.filename}` : (coverImageAlt || '');
-
-    db.run(
-        `INSERT INTO articles (title, content, description, author, cover_image, tags, read_time)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [title, content || '', description || '', author || '', imagePath,
-            JSON.stringify(tags || []), read_time || 5],
-        function (err) {
-            if (err) return res.status(500).json({ error: err.message });
-            res.status(201).json({ id: this.lastID, title });
-        }
-    );
-});
-
-router.put('/articles/:id', requireAuth, requireEditor, upload.single('cover_image'), (req, res) => {
-    const { title, content, description, author, cover_image: coverImageAlt, tags, read_time } = req.body;
-    const { id } = req.params;
-
-    let imagePath = req.file ? `/uploads/${req.file.filename}` : coverImageAlt;
-
-    const query = `UPDATE articles SET title=?, content=?, description=?, author=?, tags=?, read_time=?${imagePath !== undefined ? ', cover_image=?' : ''} WHERE id=?`;
-    const params = [title, content, description, author, JSON.stringify(tags || []), read_time];
-
-    if (imagePath !== undefined) {
-        params.push(imagePath);
+    } catch (err) {
+        res.status(500).json({ error: err.message });
     }
-    params.push(id);
-
-    db.run(query, params, function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ message: 'Updated', changes: this.changes });
-    });
 });
 
-router.delete('/articles/:id', requireAuth, requireEditor, (req, res) => {
-    db.run(`DELETE FROM articles WHERE id = ?`, [req.params.id], function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ message: 'Deleted', changes: this.changes });
-    });
+router.post('/articles', requireAuth, requireEditor, upload.single('cover_image'), async (req, res) => {
+    try {
+        const { title, content, description, author, cover_image: coverImageAlt, tags, read_time } = req.body;
+        const imagePath = req.file ? `/uploads/${req.file.filename}` : (coverImageAlt || '');
+
+        const article = await prisma.articles.create({
+            data: {
+                title,
+                content: content || '',
+                description: description || '',
+                author: author || '',
+                cover_image: imagePath,
+                tags: typeof tags === 'string' ? tags : JSON.stringify(tags || []),
+                read_time: parseInt(read_time) || 5
+            }
+        });
+        res.status(201).json({ id: article.id, title });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.put('/articles/:id', requireAuth, requireEditor, upload.single('cover_image'), async (req, res) => {
+    try {
+        const { title, content, description, author, cover_image: coverImageAlt, tags, read_time } = req.body;
+        const { id } = req.params;
+        let imagePath = req.file ? `/uploads/${req.file.filename}` : coverImageAlt;
+
+        const data = {
+            title,
+            content,
+            description,
+            author,
+            tags: typeof tags === 'string' ? tags : JSON.stringify(tags || []),
+            read_time: parseInt(read_time)
+        };
+
+        if (imagePath !== undefined) {
+            data.cover_image = imagePath;
+        }
+
+        const article = await prisma.articles.update({
+            where: { id: parseInt(id) },
+            data
+        });
+        res.json({ message: 'Updated', article });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.delete('/articles/:id', requireAuth, requireEditor, async (req, res) => {
+    try {
+        await prisma.articles.delete({
+            where: { id: parseInt(req.params.id) }
+        });
+        res.json({ message: 'Deleted' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // ═══════════════════════════════════════════════════════════
@@ -114,237 +138,341 @@ router.get('/latest', lmsController.getLatestKnowledge);
 // ═══════════════════════════════════════════════════════════
 //  LESSONS
 // ═══════════════════════════════════════════════════════════
-router.get('/units/:id/lessons', (req, res) => {
-    db.all(`SELECT * FROM lessons WHERE unit_id = ? ORDER BY sort_order ASC`, [req.params.id], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
+router.get('/units/:id/lessons', async (req, res) => {
+    try {
+        const rows = await prisma.lessons.findMany({
+            where: { unit_id: parseInt(req.params.id) },
+            orderBy: { sort_order: 'asc' }
+        });
         res.json(rows || []);
-    });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
-router.get('/lessons/:id', (req, res) => {
-    db.get(`SELECT * FROM lessons WHERE id = ?`, [req.params.id], (err, row) => {
-        if (err) return res.status(500).json({ error: err.message });
+router.get('/lessons/:id', async (req, res) => {
+    try {
+        const row = await prisma.lessons.findUnique({
+            where: { id: parseInt(req.params.id) }
+        });
         if (!row) return res.status(404).json({ error: 'Lesson not found' });
         res.json(row);
-    });
-});
-
-router.post('/lessons', requireAuth, requireEditor, (req, res) => {
-    const { unit_id, title, content, xp_reward, video_url, is_interactive, sort_order, quiz_config, terminal_config, next_lesson_id } = req.body;
-    db.run(
-        `INSERT INTO lessons (unit_id, title, content, xp_reward, video_url, is_interactive, sort_order, quiz_config, terminal_config, next_lesson_id) 
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [unit_id, title, content || '', xp_reward || 10, video_url || null,
-            is_interactive ? 1 : 0, sort_order || 0,
-            quiz_config || '[]', terminal_config || '{}', next_lesson_id || null],
-        function (err) {
-            if (err) return res.status(500).json({ error: err.message });
-            res.status(201).json({ id: this.lastID, title });
-        }
-    );
-});
-
-router.put('/lessons/:id', requireAuth, requireEditor, (req, res) => {
-    const { title, content, xp_reward, video_url, is_interactive, sort_order, quiz_config, terminal_config, next_lesson_id } = req.body;
-    db.run(
-        `UPDATE lessons SET title=?, content=?, xp_reward=?, video_url=?, is_interactive=?, sort_order=?, quiz_config=?, terminal_config=?, next_lesson_id=? WHERE id=?`,
-        [title, content, xp_reward, video_url, is_interactive ? 1 : 0, sort_order,
-            quiz_config, terminal_config, next_lesson_id || null, req.params.id],
-        function (err) {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ message: 'Updated', changes: this.changes });
-        }
-    );
-});
-
-router.post('/lessons/bulk', requireAuth, requireEditor, (req, res) => {
-    const { lessons } = req.body;
-    if (!lessons || !Array.isArray(lessons) || lessons.length === 0) {
-        return res.status(400).json({ error: 'Invalid data.' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
     }
-    let insertedCount = 0;
-    let hasError = false;
+});
 
-    db.serialize(() => {
-        db.run('BEGIN TRANSACTION');
-        lessons.forEach((lesson, index) => {
-            if (hasError) return;
-            db.run(
-                `INSERT INTO lessons (unit_id, title, content, xp_reward, sort_order, terminal_config, quiz_config) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-                [lesson.unit_id, lesson.title, lesson.content || '', lesson.xp_reward || 10,
-                lesson.sort_order || index + 1, lesson.terminal_config || '{}', lesson.quiz_config || '[]'],
-                function (err) {
-                    if (err) {
-                        hasError = true;
-                        db.run('ROLLBACK');
-                        return res.status(500).json({ error: 'Bulk insert failed at: ' + lesson.title });
-                    }
-                    insertedCount++;
-                    if (insertedCount === lessons.length) {
-                        db.run('COMMIT', (commitErr) => {
-                            if (commitErr) return res.status(500).json({ error: 'Commit failed' });
-                            res.status(201).json({ message: `Successfully added ${insertedCount} lessons.` });
-                        });
-                    }
-                }
-            );
+router.post('/lessons', requireAuth, requireEditor, async (req, res) => {
+    try {
+        const { unit_id, title, content, xp_reward, video_url, is_interactive, sort_order, quiz_config, terminal_config, next_lesson_id } = req.body;
+        const lesson = await prisma.lessons.create({
+            data: {
+                unit_id: parseInt(unit_id),
+                title,
+                content: content || '',
+                xp_reward: parseInt(xp_reward) || 10,
+                video_url: video_url || null,
+                is_interactive: !!is_interactive,
+                sort_order: parseInt(sort_order) || 0,
+                quiz_config: typeof quiz_config === 'string' ? quiz_config : JSON.stringify(quiz_config || []),
+                terminal_config: typeof terminal_config === 'string' ? terminal_config : JSON.stringify(terminal_config || {}),
+                next_lesson_id: next_lesson_id ? parseInt(next_lesson_id) : null
+            }
         });
-    });
+        res.status(201).json({ id: lesson.id, title });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.put('/lessons/:id', requireAuth, requireEditor, async (req, res) => {
+    try {
+        const { title, content, xp_reward, video_url, is_interactive, sort_order, quiz_config, terminal_config, next_lesson_id } = req.body;
+        await prisma.lessons.update({
+            where: { id: parseInt(req.params.id) },
+            data: {
+                title,
+                content,
+                xp_reward: parseInt(xp_reward),
+                video_url,
+                is_interactive: !!is_interactive,
+                sort_order: parseInt(sort_order),
+                quiz_config: typeof quiz_config === 'string' ? quiz_config : JSON.stringify(quiz_config),
+                terminal_config: typeof terminal_config === 'string' ? terminal_config : JSON.stringify(terminal_config),
+                next_lesson_id: next_lesson_id ? parseInt(next_lesson_id) : null
+            }
+        });
+        res.json({ message: 'Updated' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
+});
+
+router.post('/lessons/bulk', requireAuth, requireEditor, async (req, res) => {
+    try {
+        const { lessons } = req.body;
+        if (!lessons || !Array.isArray(lessons) || lessons.length === 0) {
+            return res.status(400).json({ error: 'Invalid data.' });
+        }
+
+        const createdLessons = await prisma.$transaction(
+            lessons.map((lesson, index) => prisma.lessons.create({
+                data: {
+                    unit_id: parseInt(lesson.unit_id),
+                    title: lesson.title,
+                    content: lesson.content || '',
+                    xp_reward: parseInt(lesson.xp_reward) || 10,
+                    sort_order: parseInt(lesson.sort_order) || index + 1,
+                    terminal_config: typeof lesson.terminal_config === 'string' ? lesson.terminal_config : JSON.stringify(lesson.terminal_config || {}),
+                    quiz_config: typeof lesson.quiz_config === 'string' ? lesson.quiz_config : JSON.stringify(lesson.quiz_config || [])
+                }
+            }))
+        );
+
+        res.status(201).json({ message: `Successfully added ${createdLessons.length} lessons.` });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // ═══════════════════════════════════════════════════════════
 //  TRACKS / COURSES / UNITS — CRUD
 // ═══════════════════════════════════════════════════════════
-router.get('/tracks', (req, res) => {
-    db.all(`SELECT * FROM tracks ORDER BY id`, [], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
+router.get('/tracks', async (req, res) => {
+    try {
+        const rows = await prisma.tracks.findMany({
+            orderBy: { id: 'asc' }
+        });
         res.json(rows || []);
-    });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
-router.post('/tracks', requireAuth, requireAdmin, (req, res) => {
-    const { title, description, icon } = req.body;
-    db.run(`INSERT INTO tracks (title, description, icon) VALUES (?, ?, ?)`, [title, description || '', icon || ''], function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.status(201).json({ id: this.lastID, title });
-    });
+router.post('/tracks', requireAuth, requireAdmin, async (req, res) => {
+    try {
+        const { title, description, icon } = req.body;
+        const track = await prisma.tracks.create({
+            data: { title, description: description || '', icon: icon || '' }
+        });
+        res.status(201).json({ id: track.id, title });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
-router.get('/tracks/:id/courses', (req, res) => {
-    db.all(`SELECT * FROM courses WHERE track_id = ? ORDER BY sort_order`, [req.params.id], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
+router.get('/tracks/:id/courses', async (req, res) => {
+    try {
+        const rows = await prisma.courses.findMany({
+            where: { track_id: parseInt(req.params.id) },
+            orderBy: { sort_order: 'asc' }
+        });
         res.json(rows || []);
-    });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
-router.post('/courses', requireAuth, requireAdmin, (req, res) => {
-    const { track_id, title } = req.body;
-    db.run(`INSERT INTO courses (track_id, title) VALUES (?, ?)`, [track_id, title], function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.status(201).json({ id: this.lastID, title });
-    });
+router.post('/courses', requireAuth, requireAdmin, async (req, res) => {
+    try {
+        const { track_id, title } = req.body;
+        const course = await prisma.courses.create({
+            data: { track_id: parseInt(track_id), title }
+        });
+        res.status(201).json({ id: course.id, title });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
-router.get('/courses/:id/units', (req, res) => {
-    db.all(`SELECT * FROM units WHERE course_id = ? ORDER BY sort_order`, [req.params.id], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
+router.get('/courses/:id/units', async (req, res) => {
+    try {
+        const rows = await prisma.units.findMany({
+            where: { course_id: parseInt(req.params.id) },
+            orderBy: { sort_order: 'asc' }
+        });
         res.json(rows || []);
-    });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
-router.post('/units', requireAuth, requireAdmin, (req, res) => {
-    const { course_id, title } = req.body;
-    db.run(`INSERT INTO units (course_id, title) VALUES (?, ?)`, [course_id, title], function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.status(201).json({ id: this.lastID, title });
-    });
+router.post('/units', requireAuth, requireAdmin, async (req, res) => {
+    try {
+        const { course_id, title } = req.body;
+        const unit = await prisma.units.create({
+            data: { course_id: parseInt(course_id), title }
+        });
+        res.status(201).json({ id: unit.id, title });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // Generic Delete for tracks/courses/units/lessons
-router.delete('/tracks/:id', requireAuth, requireAdmin, (req, res) => {
-    db.run(`DELETE FROM tracks WHERE id = ?`, [req.params.id], function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ message: 'Deleted', changes: this.changes });
-    });
+router.delete('/tracks/:id', requireAuth, requireAdmin, async (req, res) => {
+    try {
+        await prisma.tracks.delete({
+            where: { id: parseInt(req.params.id) }
+        });
+        res.json({ message: 'Deleted' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
-router.delete('/courses/:id', requireAuth, requireAdmin, (req, res) => {
-    db.run(`DELETE FROM courses WHERE id = ?`, [req.params.id], function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ message: 'Deleted', changes: this.changes });
-    });
+router.delete('/courses/:id', requireAuth, requireAdmin, async (req, res) => {
+    try {
+        await prisma.courses.delete({
+            where: { id: parseInt(req.params.id) }
+        });
+        res.json({ message: 'Deleted' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
-router.delete('/units/:id', requireAuth, requireAdmin, (req, res) => {
-    db.run(`DELETE FROM units WHERE id = ?`, [req.params.id], function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ message: 'Deleted', changes: this.changes });
-    });
+router.delete('/units/:id', requireAuth, requireAdmin, async (req, res) => {
+    try {
+        await prisma.units.delete({
+            where: { id: parseInt(req.params.id) }
+        });
+        res.json({ message: 'Deleted' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
-router.delete('/lessons/:id', requireAuth, requireEditor, (req, res) => {
-    db.run(`DELETE FROM lessons WHERE id = ?`, [req.params.id], function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ message: 'Deleted', changes: this.changes });
-    });
+router.delete('/lessons/:id', requireAuth, requireEditor, async (req, res) => {
+    try {
+        await prisma.lessons.delete({
+            where: { id: parseInt(req.params.id) }
+        });
+        res.json({ message: 'Deleted' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // ═══════════════════════════════════════════════════════════
 //  RECORDED COURSES — CRUD
 // ═══════════════════════════════════════════════════════════
-router.get('/recorded-courses', (req, res) => {
-    db.all(`SELECT * FROM recorded_courses ORDER BY sort_order ASC, created_at DESC`, [], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
+router.get('/recorded-courses', async (req, res) => {
+    try {
+        const rows = await prisma.recorded_courses.findMany({
+            orderBy: [
+                { sort_order: 'asc' },
+                { created_at: 'desc' }
+            ]
+        });
         res.json(rows || []);
-    });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
-router.get('/recorded-courses/:id', (req, res) => {
-    db.get(`SELECT * FROM recorded_courses WHERE id = ?`, [req.params.id], (err, row) => {
-        if (err) return res.status(500).json({ error: err.message });
+router.get('/recorded-courses/:id', async (req, res) => {
+    try {
+        const row = await prisma.recorded_courses.findUnique({
+            where: { id: parseInt(req.params.id) }
+        });
         if (!row) return res.status(404).json({ error: 'Not found' });
         res.json(row);
-    });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
-router.post('/recorded-courses', requireAuth, requireEditor, (req, res) => {
-    const { title, description, instructor, thumbnail_url, video_url, duration, tags, sort_order } = req.body;
-    db.run(
-        `INSERT INTO recorded_courses (title, description, instructor, thumbnail_url, video_url, duration, tags, sort_order)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [title, description || '', instructor || '', thumbnail_url || '', video_url,
-            duration || '', JSON.stringify(tags || []), sort_order || 0],
-        function (err) {
-            if (err) return res.status(500).json({ error: err.message });
-            res.status(201).json({ id: this.lastID, title });
-        }
-    );
+router.post('/recorded-courses', requireAuth, requireEditor, async (req, res) => {
+    try {
+        const { title, description, instructor, thumbnail_url, video_url, duration, tags, sort_order } = req.body;
+        const course = await prisma.recorded_courses.create({
+            data: {
+                title,
+                description: description || '',
+                instructor: instructor || '',
+                thumbnail_url: thumbnail_url || '',
+                video_url,
+                duration: duration || '',
+                tags: typeof tags === 'string' ? tags : JSON.stringify(tags || []),
+                sort_order: parseInt(sort_order) || 0
+            }
+        });
+        res.status(201).json({ id: course.id, title });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
-router.put('/recorded-courses/:id', requireAuth, requireEditor, (req, res) => {
-    const { title, description, instructor, thumbnail_url, video_url, duration, tags, sort_order } = req.body;
-    db.run(
-        `UPDATE recorded_courses SET title=?, description=?, instructor=?, thumbnail_url=?, video_url=?, duration=?, tags=?, sort_order=? WHERE id=?`,
-        [title, description, instructor, thumbnail_url, video_url, duration,
-            JSON.stringify(tags || []), sort_order, req.params.id],
-        function (err) {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ message: 'Updated', changes: this.changes });
-        }
-    );
+router.put('/recorded-courses/:id', requireAuth, requireEditor, async (req, res) => {
+    try {
+        const { title, description, instructor, thumbnail_url, video_url, duration, tags, sort_order } = req.body;
+        await prisma.recorded_courses.update({
+            where: { id: parseInt(req.params.id) },
+            data: {
+                title,
+                description,
+                instructor,
+                thumbnail_url,
+                video_url,
+                duration,
+                tags: typeof tags === 'string' ? tags : JSON.stringify(tags || []),
+                sort_order: parseInt(sort_order)
+            }
+        });
+        res.json({ message: 'Updated' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
-router.delete('/recorded-courses/:id', requireAuth, requireEditor, (req, res) => {
-    db.run(`DELETE FROM recorded_courses WHERE id = ?`, [req.params.id], function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ message: 'Deleted', changes: this.changes });
-    });
+router.delete('/recorded-courses/:id', requireAuth, requireEditor, async (req, res) => {
+    try {
+        await prisma.recorded_courses.delete({
+            where: { id: parseInt(req.params.id) }
+        });
+        res.json({ message: 'Deleted' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // ═══════════════════════════════════════════════════════════
 //  TAGS — CRUD
 // ═══════════════════════════════════════════════════════════
-router.get('/tags', (req, res) => {
-    db.all(`SELECT * FROM kb_tags ORDER BY name`, [], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
+router.get('/tags', async (req, res) => {
+    try {
+        const rows = await prisma.kb_tags.findMany({
+            orderBy: { name: 'asc' }
+        });
         res.json(rows || []);
-    });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
-router.post('/tags', requireAuth, requireEditor, (req, res) => {
-    const { name, color, type } = req.body;
-    db.run(
-        `INSERT INTO kb_tags (name, color, type) VALUES (?, ?, ?)`,
-        [name, color || '#7112AF', type || 'general'],
-        function (err) {
-            if (err) return res.status(500).json({ error: err.message });
-            res.status(201).json({ id: this.lastID, name });
-        }
-    );
+router.post('/tags', requireAuth, requireEditor, async (req, res) => {
+    try {
+        const { name, color, type } = req.body;
+        const tag = await prisma.kb_tags.create({
+            data: {
+                name,
+                color: color || '#7112AF',
+                type: type || 'general'
+            }
+        });
+        res.status(201).json({ id: tag.id, name });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
-router.delete('/tags/:id', requireAuth, requireEditor, (req, res) => {
-    db.run(`DELETE FROM kb_tags WHERE id = ?`, [req.params.id], function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ message: 'Deleted', changes: this.changes });
-    });
+router.delete('/tags/:id', requireAuth, requireEditor, async (req, res) => {
+    try {
+        await prisma.kb_tags.delete({
+            where: { id: parseInt(req.params.id) }
+        });
+        res.json({ message: 'Deleted' });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 module.exports = router;

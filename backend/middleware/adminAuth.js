@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const { db } = require('../models/database');
+const { prisma } = require('../models/prismaDatabase');
 
 const JWT_SECRET = process.env.JWT_SECRET;
 if (!JWT_SECRET) {
@@ -11,7 +11,7 @@ if (!JWT_SECRET) {
  * Middleware to verify JWT token and check if user is admin
  * Must be applied to ALL /api/admin/* routes
  */
-const requireAdmin = (req, res, next) => {
+const requireAdmin = async (req, res, next) => {
     const authHeader = req.headers.authorization;
 
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -24,32 +24,29 @@ const requireAdmin = (req, res, next) => {
         const decoded = jwt.verify(token, JWT_SECRET);
 
         // Check if user is admin
-        db.get(
-            'SELECT role FROM users WHERE id = ?',
-            [decoded.id],
-            (err, user) => {
-                if (err) {
-                    console.error('Admin auth error:', err);
-                    return res.status(500).json({ error: 'Internal server error' });
-                }
+        const user = await prisma.users.findUnique({
+            where: { id: decoded.id },
+            select: { id: true, role: true }
+        });
 
-                if (!user) {
-                    return res.status(401).json({ error: 'User not found' });
-                }
+        if (!user) {
+            return res.status(401).json({ error: 'User not found' });
+        }
 
-                if (user.role !== 'admin') {
-                    return res.status(403).json({ error: 'Forbidden. Admin access required.' });
-                }
+        if (user.role !== 'admin') {
+            return res.status(403).json({ error: 'Forbidden. Admin access required.' });
+        }
 
-                // Attach user info to request
-                req.userId = decoded.id;
-                req.userRole = user.role;
-                next();
-            }
-        );
+        // Attach user info to request
+        req.userId = decoded.id;
+        req.userRole = user.role;
+        next();
     } catch (error) {
-        console.error('Token verification failed:', error);
-        return res.status(401).json({ error: 'Invalid token' });
+        if (error.name === 'JsonWebTokenError') {
+            return res.status(401).json({ error: 'Invalid token' });
+        }
+        console.error('Admin auth error:', error);
+        return res.status(500).json({ error: 'Internal server error' });
     }
 };
 

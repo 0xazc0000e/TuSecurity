@@ -1,6 +1,6 @@
 const express = require('express');
 const { requireAuth } = require('../middleware/rbacMiddleware');
-const { db } = require('../models/database');
+const { prisma } = require('../models/prismaDatabase');
 
 const router = express.Router();
 
@@ -9,90 +9,74 @@ router.get('/saved-items', requireAuth, async (req, res) => {
     try {
         const userId = req.userId;
 
-        // Get bookmarks with item details
-        const bookmarks = await new Promise((resolve, reject) => {
-            db.all(`
-                SELECT b.*, 
-                    COALESCE(a.title, l.title, s.title, n.title, 'غير معنون') as title,
-                    COALESCE(a.reading_time, l.duration, 5) as reading_time,
-                    b.folder_id
-                FROM bookmarks b
-                LEFT JOIN articles a ON b.item_type = 'article' AND b.item_id = a.id
-                LEFT JOIN lessons l ON b.item_type = 'lesson' AND b.item_id = l.id
-                LEFT JOIN simulators s ON b.item_type = 'simulator' AND b.item_id = s.id
-                LEFT JOIN news n ON b.item_type = 'news' AND b.item_id = n.id
-                WHERE b.user_id = ?
-                ORDER BY b.created_at DESC
-            `, [userId], (err, rows) => {
-                if (err) reject(err);
-                else resolve(rows || []);
-            });
-        });
+        // Get bookmarks, likes, and reading list
+        const [bookmarksRaw, likesRaw, readingListRaw] = await Promise.all([
+            prisma.bookmarks.findMany({
+                where: { user_id: userId },
+                orderBy: { added_at: 'desc' }
+            }),
+            prisma.likes.findMany({
+                where: { user_id: userId },
+                orderBy: { added_at: 'desc' }
+            }),
+            prisma.reading_list.findMany({
+                where: { user_id: userId },
+                orderBy: { added_at: 'desc' }
+            })
+        ]);
 
-        // Get likes with item details
-        const likes = await new Promise((resolve, reject) => {
-            db.all(`
-                SELECT l.*,
-                    COALESCE(a.title, n.title, s.title, 'غير معنون') as title
-                FROM likes l
-                LEFT JOIN articles a ON l.item_type = 'article' AND l.item_id = a.id
-                LEFT JOIN news n ON l.item_type = 'news' AND l.item_id = n.id
-                LEFT JOIN simulators s ON l.item_type = 'simulator' AND l.item_id = s.id
-                WHERE l.user_id = ?
-                ORDER BY l.created_at DESC
-            `, [userId], (err, rows) => {
-                if (err) reject(err);
-                else resolve(rows || []);
-            });
-        });
+        // Helper to fetch details for items
+        const fetchDetails = async (items) => {
+            return Promise.all(items.map(async (item) => {
+                let detail = null;
+                if (item.item_type === 'article') {
+                    detail = await prisma.articles.findUnique({ where: { id: item.item_id } });
+                    return { ...item, title: detail?.title || 'غير معنون', reading_time: detail?.reading_time || 5 };
+                } else if (item.item_type === 'lesson') {
+                    detail = await prisma.lessons.findUnique({ where: { id: item.item_id } });
+                    return { ...item, title: detail?.title || 'غير معنون', reading_time: detail?.duration || 5 };
+                } else if (item.item_type === 'simulator') {
+                    detail = await prisma.simulators.findUnique({ where: { id: item.item_id } });
+                    return { ...item, title: detail?.title || 'غير معنون', reading_time: 5 };
+                } else if (item.item_type === 'news') {
+                    detail = await prisma.news.findUnique({ where: { id: item.item_id } });
+                    return { ...item, title: detail?.title || 'غير معنون', reading_time: 5 };
+                }
+                return { ...item, title: 'غير معنون', reading_time: 5 };
+            }));
+        };
 
-        // Get reading list
-        const readingList = await new Promise((resolve, reject) => {
-            db.all(`
-                SELECT rl.*,
-                    COALESCE(a.title, l.title, 'غير معنون') as title,
-                    COALESCE(a.reading_time, l.duration, 5) as reading_time
-                FROM reading_list rl
-                LEFT JOIN articles a ON rl.item_type = 'article' AND rl.item_id = a.id
-                LEFT JOIN lessons l ON rl.item_type = 'lesson' AND rl.item_id = l.id
-                WHERE rl.user_id = ?
-                ORDER BY rl.added_at DESC
-            `, [userId], (err, rows) => {
-                if (err) reject(err);
-                else resolve(rows || []);
-            });
-        });
+        const bookmarks = await fetchDetails(bookmarksRaw);
+        const likes = await fetchDetails(likesRaw);
+        const readingList = await fetchDetails(readingListRaw);
 
         // Get folders
-        const folders = await new Promise((resolve, reject) => {
-            db.all(`
-                SELECT f.*, 
-                    (SELECT COUNT(*) FROM bookmarks WHERE folder_id = f.id) as count
-                FROM bookmark_folders f
-                WHERE f.user_id = ?
-                ORDER BY f.created_at DESC
-            `, [userId], (err, rows) => {
-                if (err) reject(err);
-                else {
-                    // Add default folders
-                    const allFolder = { 
-                        id: 'default', 
-                        name: 'الكل', 
-                        icon: '📁', 
-                        count: bookmarks.length,
-                        is_default: true 
-                    };
-                    resolve([allFolder, ...(rows || [])]);
-                }
-            });
+        const foldersFromDb = await prisma.bookmark_folders.findMany({
+            where: { user_id: userId },
+            orderBy: { created_at: 'desc' }
         });
+
+        // Manually count bookmarks for each folder
+        const folders = await Promise.all(foldersFromDb.map(async (f) => {
+            const count = await prisma.bookmarks.count({ where: { folder_id: f.id } });
+            return { ...f, count };
+        }));
+
+        // Add default "All" folder
+        const allFolder = {
+            id: 'default',
+            name: 'الكل',
+            icon: '📁',
+            count: bookmarks.length,
+            is_default: true
+        };
 
         res.json({
             success: true,
             bookmarks,
             likes,
             readingList,
-            folders
+            folders: [allFolder, ...folders]
         });
     } catch (error) {
         console.error('Error fetching saved items:', error);
@@ -106,40 +90,31 @@ router.post('/bookmarks/add', requireAuth, async (req, res) => {
         const userId = req.userId;
         const { itemId, itemType, note, folderId } = req.body;
 
-        // Check if already bookmarked
-        const existing = await new Promise((resolve, reject) => {
-            db.get(`
-                SELECT id FROM bookmarks 
-                WHERE user_id = ? AND item_id = ? AND item_type = ?
-            `, [userId, itemId, itemType], (err, row) => {
-                if (err) reject(err);
-                else resolve(row);
-            });
-        });
-
-        if (existing) {
-            return res.status(400).json({ 
-                success: false, 
-                error: 'Item already bookmarked',
-                bookmarkId: existing.id
-            });
-        }
-
-        // Add bookmark
-        const result = await new Promise((resolve, reject) => {
-            db.run(`
-                INSERT INTO bookmarks (user_id, item_id, item_type, note, folder_id, created_at)
-                VALUES (?, ?, ?, ?, ?, datetime('now'))
-            `, [userId, itemId, itemType, note || null, folderId || null], function(err) {
-                if (err) reject(err);
-                else resolve(this.lastID);
-            });
+        const bookmark = await prisma.bookmarks.upsert({
+            where: {
+                user_id_item_id_item_type: {
+                    user_id: userId,
+                    item_id: itemId,
+                    item_type: itemType
+                }
+            },
+            update: {
+                note: note || undefined,
+                folder_id: folderId || undefined
+            },
+            create: {
+                user_id: userId,
+                item_id: itemId,
+                item_type: itemType,
+                note: note || null,
+                folder_id: folderId || null
+            }
         });
 
         res.json({
             success: true,
             message: 'Item bookmarked successfully',
-            bookmarkId: result
+            bookmarkId: bookmark.id
         });
     } catch (error) {
         console.error('Error adding bookmark:', error);
@@ -153,14 +128,14 @@ router.post('/bookmarks/remove', requireAuth, async (req, res) => {
         const userId = req.userId;
         const { itemId, itemType } = req.body;
 
-        await new Promise((resolve, reject) => {
-            db.run(`
-                DELETE FROM bookmarks 
-                WHERE user_id = ? AND item_id = ? AND item_type = ?
-            `, [userId, itemId, itemType], (err) => {
-                if (err) reject(err);
-                else resolve();
-            });
+        await prisma.bookmarks.delete({
+            where: {
+                user_id_item_id_item_type: {
+                    user_id: userId,
+                    item_id: itemId,
+                    item_type: itemType
+                }
+            }
         });
 
         res.json({ success: true, message: 'Bookmark removed successfully' });
@@ -176,59 +151,52 @@ router.post('/likes/add', requireAuth, async (req, res) => {
         const userId = req.userId;
         const { itemId, itemType } = req.body;
 
-        // Check if already liked
-        const existing = await new Promise((resolve, reject) => {
-            db.get(`
-                SELECT id FROM likes 
-                WHERE user_id = ? AND item_id = ? AND item_type = ?
-            `, [userId, itemId, itemType], (err, row) => {
-                if (err) reject(err);
-                else resolve(row);
+        const result = await prisma.$transaction(async (tx) => {
+            const existing = await tx.likes.findUnique({
+                where: {
+                    user_id_item_id_item_type: {
+                        user_id: userId,
+                        item_id: itemId,
+                        item_type: itemType
+                    }
+                }
             });
-        });
 
-        if (existing) {
-            return res.status(400).json({ 
-                success: false, 
-                error: 'Item already liked',
-                likeId: existing.id
+            if (existing) return { alreadyLiked: true, id: existing.id };
+
+            const like = await tx.likes.create({
+                data: { user_id: userId, item_id: itemId, item_type: itemType }
             });
-        }
 
-        // Add like
-        const result = await new Promise((resolve, reject) => {
-            db.run(`
-                INSERT INTO likes (user_id, item_id, item_type, created_at)
-                VALUES (?, ?, ?, datetime('now'))
-            `, [userId, itemId, itemType], function(err) {
-                if (err) reject(err);
-                else resolve(this.lastID);
-            });
-        });
-
-        // Increment item's like count
-        const tableMap = {
-            'article': 'articles',
-            'lesson': 'lessons',
-            'news': 'news',
-            'simulator': 'simulators'
-        };
-        const table = tableMap[itemType];
-        if (table) {
-            await new Promise((resolve, reject) => {
-                db.run(`
-                    UPDATE ${table} SET likes_count = likes_count + 1 WHERE id = ?
-                `, [itemId], (err) => {
-                    if (err) reject(err);
-                    else resolve();
+            const tableMap = {
+                'article': 'articles',
+                'lesson': 'lessons',
+                'news': 'news',
+                'simulator': 'simulators'
+            };
+            const table = tableMap[itemType];
+            if (table) {
+                await tx[table].update({
+                    where: { id: itemId },
+                    data: { likes_count: { increment: 1 } }
                 });
+            }
+
+            return { id: like.id };
+        });
+
+        if (result.alreadyLiked) {
+            return res.status(400).json({
+                success: false,
+                error: 'Item already liked',
+                likeId: result.id
             });
         }
 
         res.json({
             success: true,
             message: 'Item liked successfully',
-            likeId: result
+            likeId: result.id
         });
     } catch (error) {
         console.error('Error adding like:', error);
@@ -242,34 +210,35 @@ router.post('/likes/remove', requireAuth, async (req, res) => {
         const userId = req.userId;
         const { itemId, itemType } = req.body;
 
-        await new Promise((resolve, reject) => {
-            db.run(`
-                DELETE FROM likes 
-                WHERE user_id = ? AND item_id = ? AND item_type = ?
-            `, [userId, itemId, itemType], (err) => {
-                if (err) reject(err);
-                else resolve();
+        await prisma.$transaction(async (tx) => {
+            await tx.likes.delete({
+                where: {
+                    user_id_item_id_item_type: {
+                        user_id: userId,
+                        item_id: itemId,
+                        item_type: itemType
+                    }
+                }
             });
-        });
 
-        // Decrement item's like count
-        const tableMap = {
-            'article': 'articles',
-            'lesson': 'lessons',
-            'news': 'news',
-            'simulator': 'simulators'
-        };
-        const table = tableMap[itemType];
-        if (table) {
-            await new Promise((resolve, reject) => {
-                db.run(`
-                    UPDATE ${table} SET likes_count = MAX(0, likes_count - 1) WHERE id = ?
-                `, [itemId], (err) => {
-                    if (err) reject(err);
-                    else resolve();
-                });
-            });
-        }
+            const tableMap = {
+                'article': 'articles',
+                'lesson': 'lessons',
+                'news': 'news',
+                'simulator': 'simulators'
+            };
+            const table = tableMap[itemType];
+            if (table) {
+                // We'll manually check and decrement ensuring it doesn't go below 0
+                const item = await tx[table].findUnique({ where: { id: itemId }, select: { likes_count: true } });
+                if (item && item.likes_count > 0) {
+                    await tx[table].update({
+                        where: { id: itemId },
+                        data: { likes_count: { decrement: 1 } }
+                    });
+                }
+            }
+        });
 
         res.json({ success: true, message: 'Like removed successfully' });
     } catch (error) {
@@ -284,40 +253,26 @@ router.post('/reading-list/add', requireAuth, async (req, res) => {
         const userId = req.userId;
         const { itemId, itemType } = req.body;
 
-        // Check if already in reading list
-        const existing = await new Promise((resolve, reject) => {
-            db.get(`
-                SELECT id FROM reading_list 
-                WHERE user_id = ? AND item_id = ? AND item_type = ?
-            `, [userId, itemId, itemType], (err, row) => {
-                if (err) reject(err);
-                else resolve(row);
-            });
-        });
-
-        if (existing) {
-            return res.status(400).json({ 
-                success: false, 
-                error: 'Item already in reading list',
-                itemId: existing.id
-            });
-        }
-
-        // Add to reading list
-        const result = await new Promise((resolve, reject) => {
-            db.run(`
-                INSERT INTO reading_list (user_id, item_id, item_type, added_at)
-                VALUES (?, ?, ?, datetime('now'))
-            `, [userId, itemId, itemType], function(err) {
-                if (err) reject(err);
-                else resolve(this.lastID);
-            });
+        const result = await prisma.reading_list.upsert({
+            where: {
+                user_id_item_id_item_type: {
+                    user_id: userId,
+                    item_id: itemId,
+                    item_type: itemType
+                }
+            },
+            update: {},
+            create: {
+                user_id: userId,
+                item_id: itemId,
+                item_type: itemType
+            }
         });
 
         res.json({
             success: true,
             message: 'Item added to reading list',
-            itemId: result
+            itemId: result.id
         });
     } catch (error) {
         console.error('Error adding to reading list:', error);
@@ -331,14 +286,14 @@ router.post('/reading-list/remove', requireAuth, async (req, res) => {
         const userId = req.userId;
         const { itemId, itemType } = req.body;
 
-        await new Promise((resolve, reject) => {
-            db.run(`
-                DELETE FROM reading_list 
-                WHERE user_id = ? AND item_id = ? AND item_type = ?
-            `, [userId, itemId, itemType], (err) => {
-                if (err) reject(err);
-                else resolve();
-            });
+        await prisma.reading_list.delete({
+            where: {
+                user_id_item_id_item_type: {
+                    user_id: userId,
+                    item_id: itemId,
+                    item_type: itemType
+                }
+            }
         });
 
         res.json({ success: true, message: 'Item removed from reading list' });
@@ -358,23 +313,19 @@ router.post('/folders/create', requireAuth, async (req, res) => {
             return res.status(400).json({ success: false, error: 'Folder name is required' });
         }
 
-        const result = await new Promise((resolve, reject) => {
-            db.run(`
-                INSERT INTO bookmark_folders (user_id, name, icon, created_at)
-                VALUES (?, ?, ?, datetime('now'))
-            `, [userId, name.trim(), icon || '📁'], function(err) {
-                if (err) reject(err);
-                else resolve(this.lastID);
-            });
+        const folder = await prisma.bookmark_folders.create({
+            data: {
+                user_id: userId,
+                name: name.trim(),
+                icon: icon || '📁'
+            }
         });
 
         res.json({
             success: true,
             message: 'Folder created successfully',
             folder: {
-                id: result,
-                name: name.trim(),
-                icon: icon || '📁',
+                ...folder,
                 count: 0
             }
         });
@@ -388,17 +339,17 @@ router.post('/folders/create', requireAuth, async (req, res) => {
 router.post('/bookmarks/move', requireAuth, async (req, res) => {
     try {
         const userId = req.userId;
-        const { itemId, folderId } = req.body;
+        const { itemId, itemType, folderId } = req.body; // itemId and itemType combined needed for unique key
 
-        await new Promise((resolve, reject) => {
-            db.run(`
-                UPDATE bookmarks 
-                SET folder_id = ?, updated_at = datetime('now')
-                WHERE user_id = ? AND item_id = ?
-            `, [folderId, userId, itemId], (err) => {
-                if (err) reject(err);
-                else resolve();
-            });
+        await prisma.bookmarks.update({
+            where: {
+                user_id_item_id_item_type: {
+                    user_id: userId,
+                    item_id: itemId,
+                    item_type: itemType
+                }
+            },
+            data: { folder_id: folderId }
         });
 
         res.json({ success: true, message: 'Bookmark moved to folder' });
@@ -413,23 +364,17 @@ router.get('/saved-count', requireAuth, async (req, res) => {
     try {
         const userId = req.userId;
 
-        const counts = await new Promise((resolve, reject) => {
-            db.get(`
-                SELECT 
-                    (SELECT COUNT(*) FROM bookmarks WHERE user_id = ?) as bookmarks,
-                    (SELECT COUNT(*) FROM likes WHERE user_id = ?) as likes,
-                    (SELECT COUNT(*) FROM reading_list WHERE user_id = ?) as reading_list
-            `, [userId, userId, userId], (err, row) => {
-                if (err) reject(err);
-                else resolve(row || { bookmarks: 0, likes: 0, reading_list: 0 });
-            });
-        });
+        const [bookmarks, likes, reading_list] = await Promise.all([
+            prisma.bookmarks.count({ where: { user_id: userId } }),
+            prisma.likes.count({ where: { user_id: userId } }),
+            prisma.reading_list.count({ where: { user_id: userId } })
+        ]);
 
         res.json({
             success: true,
-            bookmarks: counts.bookmarks,
-            likes: counts.likes,
-            reading_list: counts.reading_list
+            bookmarks,
+            likes,
+            reading_list
         });
     } catch (error) {
         console.error('Error fetching saved count:', error);
@@ -442,42 +387,25 @@ router.get('/item-status/:itemType/:itemId', requireAuth, async (req, res) => {
     try {
         const userId = req.userId;
         const { itemType, itemId } = req.params;
+        const id = parseInt(itemId);
 
         const [isBookmarked, isLiked, inReadingList] = await Promise.all([
-            new Promise((resolve, reject) => {
-                db.get(`
-                    SELECT id FROM bookmarks 
-                    WHERE user_id = ? AND item_id = ? AND item_type = ?
-                `, [userId, itemId, itemType], (err, row) => {
-                    if (err) reject(err);
-                    else resolve(!!row);
-                });
+            prisma.bookmarks.findUnique({
+                where: { user_id_item_id_item_type: { user_id: userId, item_id: id, item_type: itemType } }
             }),
-            new Promise((resolve, reject) => {
-                db.get(`
-                    SELECT id FROM likes 
-                    WHERE user_id = ? AND item_id = ? AND item_type = ?
-                `, [userId, itemId, itemType], (err, row) => {
-                    if (err) reject(err);
-                    else resolve(!!row);
-                });
+            prisma.likes.findUnique({
+                where: { user_id_item_id_item_type: { user_id: userId, item_id: id, item_type: itemType } }
             }),
-            new Promise((resolve, reject) => {
-                db.get(`
-                    SELECT id FROM reading_list 
-                    WHERE user_id = ? AND item_id = ? AND item_type = ?
-                `, [userId, itemId, itemType], (err, row) => {
-                    if (err) reject(err);
-                    else resolve(!!row);
-                });
+            prisma.reading_list.findUnique({
+                where: { user_id_item_id_item_type: { user_id: userId, item_id: id, item_type: itemType } }
             })
         ]);
 
         res.json({
             success: true,
-            isBookmarked,
-            isLiked,
-            inReadingList
+            isBookmarked: !!isBookmarked,
+            isLiked: !!isLiked,
+            inReadingList: !!inReadingList
         });
     } catch (error) {
         console.error('Error checking item status:', error);

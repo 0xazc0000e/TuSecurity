@@ -1,7 +1,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
-const { db } = require('../models/database');
+const { prisma } = require('../models/prismaDatabase');
 const { sendVerificationEmail, generateVerificationCode } = require('../services/emailService');
 
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -38,8 +38,11 @@ exports.register = async (req, res) => {
         }
 
         // Check if user exists
-        db.get('SELECT * FROM users WHERE email = ?', [email], async (err, existingUser) => {
-            if (err) return res.status(500).json({ error: 'Database error' });
+        try {
+            const existingUser = await prisma.users.findUnique({
+                where: { email: email }
+            });
+            
             if (existingUser) return res.status(400).json({ error: 'Email already registered' });
 
             // Hash password
@@ -55,78 +58,99 @@ exports.register = async (req, res) => {
 
             // Save to DB with verification code
             const verificationCode = generateVerificationCode();
-            const verificationExpires = new Date(Date.now() + 30 * 60 * 1000).toISOString(); // 30 minutes
+            const verificationExpires = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
 
-            db.run(
-                `INSERT INTO users (full_name, username, email, password_hash, verification_code, verification_expires, is_verified, email_verified) VALUES (?, ?, ?, ?, ?, ?, 0, 0)`,
-                [fullName, finalUsername, email, hashedPassword, verificationCode, verificationExpires],
-                async function (err) {
-                    if (err) return res.status(500).json({ error: err.message });
-
-                    // Send verification email
-                    try {
-                        await sendVerificationEmail(email, verificationCode, finalUsername);
-                    } catch (emailErr) {
-                        console.error('Failed to send verification email:', emailErr);
-                    }
-
-                    res.status(201).json({
-                        success: true,
-                        message: 'تم إنشاء الحساب. تحقق من بريدك الإلكتروني لتأكيد الحساب.',
-                        email: email,
-                        requiresVerification: true
-                    });
+            const newUser = await prisma.users.create({
+                data: {
+                    full_name: fullName,
+                    username: finalUsername,
+                    email: email,
+                    password_hash: hashedPassword,
+                    verification_code: verificationCode,
+                    verification_expires: verificationExpires,
+                    is_verified: false,
+                    email_verified: 0
                 }
-            );
-        });
+            });
+
+            // Send verification email
+            try {
+                await sendVerificationEmail(email, verificationCode, finalUsername);
+            } catch (emailErr) {
+                console.error('Failed to send verification email:', emailErr);
+            }
+
+            res.status(201).json({
+                success: true,
+                message: 'تم إنشاء الحساب. تحقق من بريدك الإلكتروني لتأكيد الحساب.',
+                email: email,
+                requiresVerification: true
+            });
+        } catch (error) {
+            console.error('Database error:', error);
+            return res.status(500).json({ error: 'Database error' });
+        }
     } catch (error) {
         console.error('Registration error:', error);
         res.status(500).json({ error: 'Server error' });
     }
 };
 
-exports.verifyEmail = (req, res) => {
+exports.verifyEmail = async (req, res) => {
     const { email, code } = req.body;
 
     if (!email || !code) {
         return res.status(400).json({ error: 'البريد الإلكتروني ورمز التحقق مطلوبان' });
     }
 
-    db.get(
-        'SELECT id, verification_code, verification_expires FROM users WHERE email = ?',
-        [email],
-        (err, user) => {
-            if (err) return res.status(500).json({ error: 'Database error' });
-            if (!user) return res.status(404).json({ error: 'المستخدم غير موجود' });
-
-            // Check code match
-            if (user.verification_code !== code) {
-                return res.status(400).json({ error: 'رمز التحقق غير صحيح' });
+    try {
+        const user = await prisma.users.findUnique({
+            where: { email: email },
+            select: {
+                id: true,
+                verification_code: true,
+                verification_expires: true
             }
+        });
 
-            // Check expiry
-            if (new Date() > new Date(user.verification_expires)) {
-                return res.status(400).json({ error: 'انتهت صلاحية رمز التحقق. اطلب رمزاً جديداً.' });
-            }
+        if (!user) return res.status(404).json({ error: 'المستخدم غير موجود' });
 
-            // Mark as verified
-            db.run(
-                'UPDATE users SET is_verified = 1, email_verified = 1, verification_code = NULL, verification_expires = NULL WHERE id = ?',
-                [user.id],
-                function (err) {
-                    if (err) return res.status(500).json({ error: 'فشل تحديث الحالة' });
-                    res.json({ success: true, message: 'تم تأكيد البريد الإلكتروني بنجاح' });
-                }
-            );
+        // Check code match
+        if (user.verification_code !== code) {
+            return res.status(400).json({ error: 'رمز التحقق غير صحيح' });
         }
-    );
+
+        // Check expiry
+        if (new Date() > new Date(user.verification_expires)) {
+            return res.status(400).json({ error: 'انتهت صلاحية رمز التحقق. اطلب رمزاً جديداً.' });
+        }
+
+        // Mark as verified
+        await prisma.users.update({
+            where: { id: user.id },
+            data: {
+                is_verified: true,
+                email_verified: 1,
+                verification_code: null,
+                verification_expires: null
+            }
+        });
+
+        res.json({ success: true, message: 'تم تأكيد البريد الإلكتروني بنجاح' });
+    } catch (error) {
+        console.error('Verification error:', error);
+        res.status(500).json({ error: 'Database error' });
+    }
 };
 
-exports.login = (req, res) => {
+exports.login = async (req, res) => {
     const { email, password } = req.body;
 
-    db.get('SELECT * FROM users WHERE email = ?', [email], async (err, user) => {
-        if (err) return res.status(500).json({ error: 'Database error' });
+    try {
+        const user = await prisma.users.findUnique({
+            where: { email: email }
+        });
+
         if (!user) return res.status(401).json({ error: 'Invalid credentials' });
 
         // Check if social login user (no password)
@@ -175,7 +199,10 @@ exports.login = (req, res) => {
             },
             redirectTo
         });
-    });
+    } catch (error) {
+        console.error('Login error:', error);
+        res.status(500).json({ error: 'Database error' });
+    }
 };
 
 exports.logout = (req, res) => {
@@ -187,7 +214,7 @@ exports.logout = (req, res) => {
     res.json({ success: true, message: 'Logged out successfully' });
 };
 
-exports.completeProfile = (req, res) => {
+exports.completeProfile = async (req, res) => {
     const userId = req.user.id;
     const { bio, interests } = req.body;
 
@@ -197,33 +224,43 @@ exports.completeProfile = (req, res) => {
         avatarPath = `/uploads/${req.file.filename}`;
     }
 
-    const updates = [];
-    const params = [];
+    const updateData = {};
+    if (bio) updateData.bio = bio;
+    if (interests) updateData.interests = interests;
+    if (avatarPath) updateData.avatar = avatarPath;
 
-    if (bio) { updates.push('bio = ?'); params.push(bio); }
-    if (interests) { updates.push('interests = ?'); params.push(interests); } // Store as JSON string usually
-    if (avatarPath) { updates.push('avatar = ?'); params.push(avatarPath); }
+    if (Object.keys(updateData).length === 0) return res.json({ success: true, redirectTo: '/dashboard' });
 
-    if (updates.length === 0) return res.json({ success: true, redirectTo: '/dashboard' });
-
-    params.push(userId);
-
-    const sql = `UPDATE users SET ${updates.join(', ')} WHERE id = ?`;
-
-    db.run(sql, params, function (err) {
-        if (err) return res.status(500).json({ error: err.message });
+    try {
+        await prisma.users.update({
+            where: { id: userId },
+            data: updateData
+        });
 
         // Fetch updated user to return to frontend
-        db.get('SELECT id, username, email, full_name, avatar, bio, interests, role FROM users WHERE id = ?', [userId], (err, row) => {
-            if (err) return res.json({ success: true, redirectTo: '/dashboard' }); // Fallback
-
-            res.json({
-                success: true,
-                redirectTo: '/dashboard',
-                user: row // Return updated user object
-            });
+        const updatedUser = await prisma.users.findUnique({
+            where: { id: userId },
+            select: {
+                id: true,
+                username: true,
+                email: true,
+                full_name: true,
+                avatar: true,
+                bio: true,
+                interests: true,
+                role: true
+            }
         });
-    });
+
+        res.json({
+            success: true,
+            redirectTo: '/dashboard',
+            user: updatedUser
+        });
+    } catch (error) {
+        console.error('Profile completion error:', error);
+        res.status(500).json({ error: 'Failed to update profile' });
+    }
 };
 
 exports.authenticate = (req, res, next) => {
@@ -252,25 +289,43 @@ exports.socialLoginCallback = (req, res) => {
 exports.getProfile = async (req, res) => {
     const userId = req.user.id;
 
-    // Get user details
-    db.get('SELECT id, username, email, full_name, avatar, bio, interests, role, total_xp, streak_days FROM users WHERE id = ?', [userId], (err, user) => {
-        if (err || !user) return res.status(404).json({ error: 'User not found' });
+    try {
+        // Get user details
+        const user = await prisma.users.findUnique({
+            where: { id: userId },
+            select: {
+                id: true,
+                username: true,
+                email: true,
+                full_name: true,
+                avatar: true,
+                bio: true,
+                interests: true,
+                role: true,
+                total_xp: true,
+                streak_days: true
+            }
+        });
+
+        if (!user) return res.status(404).json({ error: 'User not found' });
 
         // Get user enrollments
-        db.all('SELECT type, item_id FROM user_enrollments WHERE user_id = ?', [userId], (err, enrollments) => {
-            if (err) {
-                console.error("Error fetching enrollments:", err);
-                // Return user without enrollments if error (fail graceful)
-                return res.json({ ...user, enrollments: [] });
+        const enrollments = await prisma.user_enrollments.findMany({
+            where: { user_id: userId },
+            select: {
+                type: true,
+                item_id: true
             }
-
-            // Add enrollments to user object
-            res.json({
-                ...user,
-                enrollments: enrollments || []
-            });
         });
-    });
+
+        res.json({
+            ...user,
+            enrollments: enrollments || []
+        });
+    } catch (error) {
+        console.error('Get profile error:', error);
+        res.status(500).json({ error: 'Database error' });
+    }
 };
 
 exports.forgotPassword = async (req, res) => {
@@ -280,8 +335,15 @@ exports.forgotPassword = async (req, res) => {
         return res.status(400).json({ error: 'البريد الإلكتروني مطلوب' });
     }
 
-    db.get('SELECT id, username, email FROM users WHERE email = ?', [email], async (err, user) => {
-        if (err) return res.status(500).json({ error: 'Database error' });
+    try {
+        const user = await prisma.users.findUnique({
+            where: { email: email },
+            select: {
+                id: true,
+                username: true,
+                email: true
+            }
+        });
 
         // Always return success to prevent email enumeration
         if (!user) {
@@ -289,25 +351,28 @@ exports.forgotPassword = async (req, res) => {
         }
 
         const resetCode = generateVerificationCode();
-        const resetExpires = new Date(Date.now() + 30 * 60 * 1000).toISOString(); // 30 minutes
+        const resetExpires = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
 
-        db.run(
-            'UPDATE users SET verification_code = ?, verification_expires = ? WHERE id = ?',
-            [resetCode, resetExpires, user.id],
-            async function (err) {
-                if (err) return res.status(500).json({ error: 'فشل إنشاء رمز إعادة التعيين' });
-
-                // Send reset email
-                try {
-                    await sendVerificationEmail(email, resetCode, user.username || 'مستخدم');
-                } catch (emailErr) {
-                    console.error('Failed to send reset email:', emailErr);
-                }
-
-                res.json({ success: true, message: 'إذا كان البريد مسجلاً، سيتم إرسال رمز إعادة التعيين.' });
+        await prisma.users.update({
+            where: { id: user.id },
+            data: {
+                verification_code: resetCode,
+                verification_expires: resetExpires
             }
-        );
-    });
+        });
+
+        // Send reset email
+        try {
+            await sendVerificationEmail(email, resetCode, user.username || 'مستخدم');
+        } catch (emailErr) {
+            console.error('Failed to send reset email:', emailErr);
+        }
+
+        res.json({ success: true, message: 'إذا كان البريد مسجلاً، سيتم إرسال رمز إعادة التعيين.' });
+    } catch (error) {
+        console.error('Forgot password error:', error);
+        res.status(500).json({ error: 'Database error' });
+    }
 };
 
 exports.resetPassword = async (req, res) => {
@@ -321,38 +386,47 @@ exports.resetPassword = async (req, res) => {
         return res.status(400).json({ error: 'كلمة المرور يجب أن تكون 6 أحرف على الأقل' });
     }
 
-    db.get(
-        'SELECT id, verification_code, verification_expires FROM users WHERE email = ?',
-        [email],
-        async (err, user) => {
-            if (err) return res.status(500).json({ error: 'Database error' });
-            if (!user) return res.status(404).json({ error: 'المستخدم غير موجود' });
-
-            // Check code match
-            if (user.verification_code !== code) {
-                return res.status(400).json({ error: 'رمز إعادة التعيين غير صحيح' });
+    try {
+        const user = await prisma.users.findUnique({
+            where: { email: email },
+            select: {
+                id: true,
+                verification_code: true,
+                verification_expires: true
             }
+        });
 
-            // Check expiry
-            if (new Date() > new Date(user.verification_expires)) {
-                return res.status(400).json({ error: 'انتهت صلاحية الرمز. اطلب رمزاً جديداً.' });
-            }
+        if (!user) return res.status(404).json({ error: 'المستخدم غير موجود' });
 
-            // Hash new password
-            const salt = await bcrypt.genSalt(10);
-            const hashedPassword = await bcrypt.hash(newPassword, salt);
-
-            // Update password and clear reset code
-            db.run(
-                'UPDATE users SET password_hash = ?, verification_code = NULL, verification_expires = NULL WHERE id = ?',
-                [hashedPassword, user.id],
-                function (err) {
-                    if (err) return res.status(500).json({ error: 'فشل تحديث كلمة المرور' });
-                    res.json({ success: true, message: 'تم إعادة تعيين كلمة المرور بنجاح' });
-                }
-            );
+        // Check code match
+        if (user.verification_code !== code) {
+            return res.status(400).json({ error: 'رمز إعادة التعيين غير صحيح' });
         }
-    );
+
+        // Check expiry
+        if (new Date() > new Date(user.verification_expires)) {
+            return res.status(400).json({ error: 'انتهت صلاحية الرمز. اطلب رمزاً جديداً.' });
+        }
+
+        // Hash new password
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(newPassword, salt);
+
+        // Update password and clear reset code
+        await prisma.users.update({
+            where: { id: user.id },
+            data: {
+                password_hash: hashedPassword,
+                verification_code: null,
+                verification_expires: null
+            }
+        });
+
+        res.json({ success: true, message: 'تم إعادة تعيين كلمة المرور بنجاح' });
+    } catch (error) {
+        console.error('Reset password error:', error);
+        res.status(500).json({ error: 'Database error' });
+    }
 };
 
 exports.resendVerification = async (req, res) => {
@@ -362,8 +436,17 @@ exports.resendVerification = async (req, res) => {
         return res.status(400).json({ error: 'البريد الإلكتروني مطلوب' });
     }
 
-    db.get('SELECT id, username, email, is_verified, email_verified FROM users WHERE email = ?', [email], async (err, user) => {
-        if (err) return res.status(500).json({ error: 'Database error' });
+    try {
+        const user = await prisma.users.findUnique({
+            where: { email: email },
+            select: {
+                id: true,
+                username: true,
+                email: true,
+                is_verified: true,
+                email_verified: true
+            }
+        });
 
         // Always return success to prevent email enumeration
         if (!user) {
@@ -375,24 +458,27 @@ exports.resendVerification = async (req, res) => {
         }
 
         const verificationCode = generateVerificationCode();
-        const verificationExpires = new Date(Date.now() + 30 * 60 * 1000).toISOString();
+        const verificationExpires = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
 
-        db.run(
-            'UPDATE users SET verification_code = ?, verification_expires = ? WHERE id = ?',
-            [verificationCode, verificationExpires, user.id],
-            async function (err) {
-                if (err) return res.status(500).json({ error: 'فشل إنشاء رمز التحقق' });
-
-                try {
-                    await sendVerificationEmail(email, verificationCode, user.username || 'مستخدم');
-                } catch (emailErr) {
-                    console.error('Failed to resend verification email:', emailErr);
-                }
-
-                res.json({ success: true, message: 'إذا كان البريد مسجلاً، سيتم إرسال رمز تحقق جديد.' });
+        await prisma.users.update({
+            where: { id: user.id },
+            data: {
+                verification_code: verificationCode,
+                verification_expires: verificationExpires
             }
-        );
-    });
+        });
+
+        try {
+            await sendVerificationEmail(email, verificationCode, user.username || 'مستخدم');
+        } catch (emailErr) {
+            console.error('Failed to resend verification email:', emailErr);
+        }
+
+        res.json({ success: true, message: 'إذا كان البريد مسجلاً، سيتم إرسال رمز تحقق جديد.' });
+    } catch (error) {
+        console.error('Resend verification error:', error);
+        res.status(500).json({ error: 'Database error' });
+    }
 };
 
 exports.updateProfile = exports.completeProfile;

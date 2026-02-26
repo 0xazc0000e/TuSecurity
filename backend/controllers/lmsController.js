@@ -1,16 +1,13 @@
-const { db } = require('../models/database');
+const { prisma } = require('../models/prismaDatabase');
 const { checkAndAwardBadges } = require('../services/badgeService');
 
 // --- 1. Tracks ---
 const getTracks = async (req, res) => {
     try {
-        const rows = await new Promise((resolve, reject) => {
-            db.all('SELECT * FROM tracks ORDER BY created_at DESC', [], (err, rows) => {
-                if (err) reject(err);
-                else resolve(rows);
-            });
+        const tracks = await prisma.tracks.findMany({
+            orderBy: { created_at: 'desc' }
         });
-        res.json({ success: true, tracks: rows });
+        res.json({ success: true, tracks: tracks });
     } catch (error) {
         console.error('Error fetching tracks:', error);
         res.status(500).json({ success: false, error: 'Failed to fetch tracks' });
@@ -25,15 +22,15 @@ const createTrack = async (req, res) => {
             return res.status(400).json({ success: false, error: 'Title is required' });
         }
 
-        const result = await new Promise((resolve, reject) => {
-            db.run('INSERT INTO tracks (title, description, icon) VALUES (?, ?, ?)',
-                [title, description, icon], function (err) {
-                    if (err) reject(err);
-                    else resolve({ id: this.lastID });
-                });
+        const track = await prisma.tracks.create({
+            data: {
+                title: title,
+                description: description,
+                icon: icon
+            }
         });
 
-        res.status(201).json({ success: true, id: result.id, title, message: 'Track created successfully' });
+        res.status(201).json({ success: true, id: track.id, title, message: 'Track created successfully' });
     } catch (error) {
         console.error('Error creating track:', error);
         res.status(500).json({ success: false, error: 'Failed to create track' });
@@ -44,11 +41,8 @@ const deleteTrack = async (req, res) => {
     try {
         const { id } = req.params;
 
-        await new Promise((resolve, reject) => {
-            db.run('DELETE FROM tracks WHERE id = ?', [id], function (err) {
-                if (err) reject(err);
-                else resolve();
-            });
+        await prisma.tracks.delete({
+            where: { id: parseInt(id) }
         });
 
         res.json({ success: true, message: 'Track deleted successfully' });
@@ -62,14 +56,11 @@ const deleteTrack = async (req, res) => {
 const getCourses = async (req, res) => {
     try {
         const { trackId } = req.params;
-        const rows = await new Promise((resolve, reject) => {
-            db.all('SELECT * FROM courses WHERE track_id = ? ORDER BY sort_order ASC',
-                [trackId], (err, rows) => {
-                    if (err) reject(err);
-                    else resolve(rows);
-                });
+        const courses = await prisma.courses.findMany({
+            where: { track_id: parseInt(trackId) },
+            orderBy: { sort_order: 'asc' }
         });
-        res.json({ success: true, courses: rows });
+        res.json({ success: true, courses: courses });
     } catch (error) {
         console.error('Error fetching courses:', error);
         res.status(500).json({ success: false, error: 'Failed to fetch courses' });
@@ -84,15 +75,16 @@ const createCourse = async (req, res) => {
             return res.status(400).json({ success: false, error: 'Track ID and title are required' });
         }
 
-        const result = await new Promise((resolve, reject) => {
-            db.run('INSERT INTO courses (track_id, title, description, sort_order) VALUES (?, ?, ?, ?)',
-                [track_id, title, description, sort_order || 0], function (err) {
-                    if (err) reject(err);
-                    else resolve({ id: this.lastID });
-                });
+        const course = await prisma.courses.create({
+            data: {
+                track_id: parseInt(track_id),
+                title: title,
+                description: description,
+                sort_order: sort_order || 0
+            }
         });
 
-        res.status(201).json({ success: true, id: result.id, title, message: 'Course created successfully' });
+        res.status(201).json({ success: true, id: course.id, title, message: 'Course created successfully' });
     } catch (error) {
         console.error('Error creating course:', error);
         res.status(500).json({ success: false, error: 'Failed to create course' });
@@ -103,11 +95,8 @@ const deleteCourse = async (req, res) => {
     try {
         const { id } = req.params;
 
-        await new Promise((resolve, reject) => {
-            db.run('DELETE FROM courses WHERE id = ?', [id], function (err) {
-                if (err) reject(err);
-                else resolve();
-            });
+        await prisma.courses.delete({
+            where: { id: parseInt(id) }
         });
 
         res.json({ success: true, message: 'Course deleted successfully' });
@@ -121,14 +110,11 @@ const deleteCourse = async (req, res) => {
 const getUnits = async (req, res) => {
     try {
         const { courseId } = req.params;
-        const rows = await new Promise((resolve, reject) => {
-            db.all('SELECT * FROM units WHERE course_id = ? ORDER BY sort_order ASC',
-                [courseId], (err, rows) => {
-                    if (err) reject(err);
-                    else resolve(rows);
-                });
+        const units = await prisma.units.findMany({
+            where: { course_id: parseInt(courseId) },
+            orderBy: { sort_order: 'asc' }
         });
-        res.json({ success: true, units: rows });
+        res.json({ success: true, units: units });
     } catch (error) {
         console.error('Error fetching units:', error);
         res.status(500).json({ success: false, error: 'Failed to fetch units' });
@@ -143,15 +129,15 @@ const createUnit = async (req, res) => {
             return res.status(400).json({ success: false, error: 'Course ID and title are required' });
         }
 
-        const result = await new Promise((resolve, reject) => {
-            db.run('INSERT INTO units (course_id, title, sort_order) VALUES (?, ?, ?)',
-                [course_id, title, sort_order || 0], function (err) {
-                    if (err) reject(err);
-                    else resolve({ id: this.lastID });
-                });
+        const unit = await prisma.units.create({
+            data: {
+                course_id: parseInt(course_id),
+                title: title,
+                sort_order: sort_order || 0
+            }
         });
 
-        res.status(201).json({ success: true, id: result.id, title, message: 'Unit created successfully' });
+        res.status(201).json({ success: true, id: unit.id, title, message: 'Unit created successfully' });
     } catch (error) {
         console.error('Error creating unit:', error);
         res.status(500).json({ success: false, error: 'Failed to create unit' });
@@ -162,11 +148,8 @@ const deleteUnit = async (req, res) => {
     try {
         const { id } = req.params;
 
-        await new Promise((resolve, reject) => {
-            db.run('DELETE FROM units WHERE id = ?', [id], function (err) {
-                if (err) reject(err);
-                else resolve();
-            });
+        await prisma.units.delete({
+            where: { id: parseInt(id) }
         });
 
         res.json({ success: true, message: 'Unit deleted successfully' });
@@ -180,14 +163,11 @@ const deleteUnit = async (req, res) => {
 const getLessons = async (req, res) => {
     try {
         const { unitId } = req.params;
-        const rows = await new Promise((resolve, reject) => {
-            db.all('SELECT * FROM lessons WHERE unit_id = ? ORDER BY sort_order ASC',
-                [unitId], (err, rows) => {
-                    if (err) reject(err);
-                    else resolve(rows);
-                });
+        const lessons = await prisma.lessons.findMany({
+            where: { unit_id: parseInt(unitId) },
+            orderBy: { sort_order: 'asc' }
         });
-        res.json({ success: true, lessons: rows });
+        res.json({ success: true, lessons });
     } catch (error) {
         console.error('Error fetching lessons:', error);
         res.status(500).json({ success: false, error: 'Failed to fetch lessons' });
@@ -202,27 +182,22 @@ const createLesson = async (req, res) => {
             return res.status(400).json({ success: false, error: 'Unit ID and title are required' });
         }
 
-        const result = await new Promise((resolve, reject) => {
-            db.run(`INSERT INTO lessons (unit_id, title, content, xp_reward, video_url, is_interactive, sort_order, quiz_config, terminal_config, next_lesson_id) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                [
-                    unit_id,
-                    title,
-                    content,
-                    xp_reward || 10,
-                    video_url,
-                    is_interactive ? 1 : 0,
-                    sort_order || 0,
-                    quiz_config || '[]',
-                    terminal_config || '{}',
-                    next_lesson_id || null
-                ], function (err) {
-                    if (err) reject(err);
-                    else resolve({ id: this.lastID });
-                });
+        const lesson = await prisma.lessons.create({
+            data: {
+                unit_id: parseInt(unit_id),
+                title,
+                content,
+                xp_reward: xp_reward || 10,
+                video_url,
+                is_interactive: !!is_interactive,
+                sort_order: sort_order || 0,
+                quiz_config: typeof quiz_config === 'string' ? quiz_config : JSON.stringify(quiz_config || []),
+                terminal_config: typeof terminal_config === 'string' ? terminal_config : JSON.stringify(terminal_config || {}),
+                next_lesson_id: next_lesson_id ? parseInt(next_lesson_id) : null
+            }
         });
 
-        res.status(201).json({ success: true, id: result.id, title, message: 'Lesson created successfully' });
+        res.status(201).json({ success: true, id: lesson.id, title, message: 'Lesson created successfully' });
     } catch (error) {
         console.error('Error creating lesson:', error);
         res.status(500).json({ success: false, error: 'Failed to create lesson' });
@@ -234,23 +209,19 @@ const updateLesson = async (req, res) => {
         const { id } = req.params;
         const { title, content, xp_reward, video_url, is_interactive, sort_order, quiz_config, terminal_config, next_lesson_id } = req.body;
 
-        await new Promise((resolve, reject) => {
-            db.run(`UPDATE lessons SET title=?, content=?, xp_reward=?, video_url=?, is_interactive=?, sort_order=?, quiz_config=?, terminal_config=?, next_lesson_id=? WHERE id=?`,
-                [
-                    title,
-                    content,
-                    xp_reward,
-                    video_url,
-                    is_interactive ? 1 : 0,
-                    sort_order,
-                    quiz_config,
-                    terminal_config,
-                    next_lesson_id || null,
-                    id
-                ], function (err) {
-                    if (err) reject(err);
-                    else resolve();
-                });
+        await prisma.lessons.update({
+            where: { id: parseInt(id) },
+            data: {
+                title,
+                content,
+                xp_reward,
+                video_url,
+                is_interactive: !!is_interactive,
+                sort_order,
+                quiz_config: typeof quiz_config === 'string' ? quiz_config : JSON.stringify(quiz_config),
+                terminal_config: typeof terminal_config === 'string' ? terminal_config : JSON.stringify(terminal_config),
+                next_lesson_id: next_lesson_id ? parseInt(next_lesson_id) : null
+            }
         });
 
         res.json({ success: true, message: 'Lesson updated successfully' });
@@ -264,11 +235,8 @@ const deleteLesson = async (req, res) => {
     try {
         const { id } = req.params;
 
-        await new Promise((resolve, reject) => {
-            db.run('DELETE FROM lessons WHERE id = ?', [id], function (err) {
-                if (err) reject(err);
-                else resolve();
-            });
+        await prisma.lessons.delete({
+            where: { id: parseInt(id) }
         });
 
         res.json({ success: true, message: 'Lesson deleted successfully' });
@@ -277,6 +245,7 @@ const deleteLesson = async (req, res) => {
         res.status(500).json({ success: false, error: 'Failed to delete lesson' });
     }
 };
+
 // --- 5. Enrollment ---
 const enrollUser = async (req, res) => {
     try {
@@ -291,26 +260,24 @@ const enrollUser = async (req, res) => {
             return res.status(400).json({ success: false, error: 'Item ID is required' });
         }
 
-        // Check if already enrolled
-        const existing = await new Promise((resolve, reject) => {
-            db.get('SELECT id FROM user_enrollments WHERE user_id = ? AND type = ? AND item_id = ?',
-                [userId, type, itemId], (err, row) => {
-                    if (err) reject(err);
-                    else resolve(row);
-                });
+        const existing = await prisma.user_enrollments.findFirst({
+            where: {
+                user_id: userId,
+                type: type,
+                item_id: parseInt(itemId)
+            }
         });
 
         if (existing) {
             return res.json({ success: true, message: 'Already enrolled' });
         }
 
-        // Enroll
-        await new Promise((resolve, reject) => {
-            db.run('INSERT INTO user_enrollments (user_id, type, item_id) VALUES (?, ?, ?)',
-                [userId, type, itemId], function (err) {
-                    if (err) reject(err);
-                    else resolve();
-                });
+        await prisma.user_enrollments.create({
+            data: {
+                user_id: userId,
+                type: type,
+                item_id: parseInt(itemId)
+            }
         });
 
         res.status(201).json({ success: true, message: 'Enrolled successfully' });
@@ -324,14 +291,11 @@ const completeLesson = async (req, res) => {
     try {
         const { id } = req.params;
         const userId = req.user.id;
+        const lessonId = parseInt(id);
 
         // Check if already completed
-        const alreadyCompleted = await new Promise((resolve, reject) => {
-            db.get('SELECT id FROM lesson_progress WHERE user_id = ? AND lesson_id = ? AND is_completed = 1',
-                [userId, id], (err, row) => {
-                    if (err) reject(err);
-                    else resolve(row);
-                });
+        const alreadyCompleted = await prisma.lesson_progress.findFirst({
+            where: { user_id: userId, lesson_id: lessonId, is_completed: true }
         });
 
         if (alreadyCompleted) {
@@ -339,19 +303,15 @@ const completeLesson = async (req, res) => {
         }
 
         // Get lesson details
-        const query = `
-            SELECT l.xp_reward, l.title, l.unit_id, u.course_id, c.track_id 
-            FROM lessons l 
-            JOIN units u ON l.unit_id = u.id 
-            JOIN courses c ON u.course_id = c.id
-            WHERE l.id = ?
-        `;
-
-        const lesson = await new Promise((resolve, reject) => {
-            db.get(query, [id], (err, row) => {
-                if (err) reject(err);
-                else resolve(row);
-            });
+        const lesson = await prisma.lessons.findUnique({
+            where: { id: lessonId },
+            include: {
+                units: {
+                    include: {
+                        courses: true
+                    }
+                }
+            }
         });
 
         if (!lesson) {
@@ -360,37 +320,53 @@ const completeLesson = async (req, res) => {
 
         const xp = lesson.xp_reward || 10;
 
-        // Mark as completed
-        await new Promise((resolve, reject) => {
-            db.run(`INSERT INTO lesson_progress (user_id, lesson_id, is_completed, progress, completed_at, xp_earned, updated_at) 
-                    VALUES (?, ?, 1, 100, datetime('now'), ?, datetime('now'))
-                    ON CONFLICT(user_id, lesson_id) DO UPDATE SET
-                    is_completed = 1, progress = 100, completed_at = datetime('now'), xp_earned = ?, updated_at = datetime('now')`,
-                [userId, id, xp, xp], function (err) {
-                    if (err) reject(err);
-                    else resolve();
+        await prisma.$transaction(async (tx) => {
+            // Mark as completed
+            await tx.lesson_progress.upsert({
+                where: {
+                    user_id_lesson_id: {
+                        user_id: userId,
+                        lesson_id: lessonId
+                    }
+                },
+                update: {
+                    is_completed: true,
+                    progress: 100,
+                    completed_at: new Date(),
+                    xp_earned: xp,
+                    updated_at: new Date()
+                },
+                create: {
+                    user_id: userId,
+                    lesson_id: lessonId,
+                    is_completed: true,
+                    progress: 100,
+                    completed_at: new Date(),
+                    xp_earned: xp,
+                    updated_at: new Date()
+                }
+            });
+
+            // Award XP
+            if (xp > 0) {
+                await tx.users.update({
+                    where: { id: userId },
+                    data: { total_xp: { increment: xp } }
                 });
+
+                // Record transaction
+                await tx.xp_transactions.create({
+                    data: {
+                        user_id: userId,
+                        xp_amount: xp,
+                        source: 'lessons',
+                        reference_id: lessonId,
+                        description: `Completed lesson: ${lesson.title}`,
+                        created_at: new Date()
+                    }
+                });
+            }
         });
-
-        // Award XP
-        if (xp > 0) {
-            await new Promise((resolve, reject) => {
-                db.run('UPDATE users SET total_xp = total_xp + ? WHERE id = ?', [xp, userId], (err) => {
-                    if (err) reject(err);
-                    else resolve();
-                });
-            });
-
-            // Record transaction
-            await new Promise((resolve, reject) => {
-                db.run(`INSERT INTO xp_transactions (user_id, xp_amount, source, reference_id, description, created_at)
-                        VALUES (?, ?, 'lessons', ?, ?, datetime('now'))`,
-                    [userId, xp, id, `Completed lesson: ${lesson.title}`], (err) => {
-                        if (err) reject(err);
-                        else resolve();
-                    });
-            });
-        }
 
         // Check and award badges
         const newlyAwarded = await checkAndAwardBadges(userId);
@@ -410,14 +386,11 @@ const completeLesson = async (req, res) => {
 const getCompletedLessons = async (req, res) => {
     try {
         const userId = req.user.id;
-        const rows = await new Promise((resolve, reject) => {
-            db.all('SELECT lesson_id FROM lesson_progress WHERE user_id = ? AND is_completed = 1',
-                [userId], (err, rows) => {
-                    if (err) reject(err);
-                    else resolve(rows);
-                });
+        const progress = await prisma.lesson_progress.findMany({
+            where: { user_id: userId, is_completed: true },
+            select: { lesson_id: true }
         });
-        res.json({ success: true, completedLessons: rows.map(r => r.lesson_id) });
+        res.json({ success: true, completedLessons: progress.map(p => p.lesson_id) });
     } catch (error) {
         console.error('Error fetching completed lessons:', error);
         res.status(500).json({ success: false, error: 'Failed to fetch completed lessons' });
@@ -425,57 +398,72 @@ const getCompletedLessons = async (req, res) => {
 };
 
 const submitQuiz = async (req, res) => {
-    const { lesson_id, score, total_questions, passed, answers } = req.body;
-
-    // Simple validation
-    if (!lesson_id || score === undefined || !total_questions) {
-        return res.status(400).json({ error: 'Missing required fields' });
-    }
-
-    const userId = req.user.id;
-    const answersJson = JSON.stringify(answers || []);
-
     try {
-        await new Promise((resolve, reject) => {
-            db.serialize(() => {
-                // 1. Record the quiz result
-                db.run(`
-                    INSERT INTO quiz_results (user_id, lesson_id, score, total_questions, passed, answers, completed_at)
-                    VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
-                `, [userId, lesson_id, score, total_questions, passed ? 1 : 0, answersJson], function (err) {
-                    if (err) {
-                        console.error("Quiz save error:", err);
-                        return reject(err);
-                    }
+        const { lesson_id, score, total_questions, passed, answers } = req.body;
+        const userId = req.user.id;
+        const lessonId = parseInt(lesson_id);
 
-                    // 2. If passed, complete the lesson
-                    if (passed) {
-                        // Get lesson XP reward
-                        db.get('SELECT xp_reward FROM lessons WHERE id = ?', [lesson_id], (err, row) => {
-                            if (err) console.error("Error fetching lesson XP:", err);
-                            const xpReward = row?.xp_reward || 0;
+        if (!lessonId || score === undefined || !total_questions) {
+            return res.status(400).json({ error: 'Missing required fields' });
+        }
 
-                            // Insert/Update lesson progress
-                            db.run(`
-                                INSERT INTO lesson_progress (user_id, lesson_id, is_completed, progress, completed_at, xp_earned, updated_at)
-                                VALUES (?, ?, 1, 100, datetime('now'), ?, datetime('now'))
-                                ON CONFLICT(user_id, lesson_id) DO UPDATE SET
-                                is_completed = 1,
-                                progress = 100,
-                                completed_at = datetime('now'),
-                                xp_earned = max(xp_earned, ?),
-                                updated_at = datetime('now')
-                            `, [userId, lesson_id, xpReward, xpReward], (err) => {
-                                if (err) console.error("Lesson completion error:", err);
-                                // Note: We are not awaiting this inner callback, but for SQLite serialization it should be fine.
-                                // Ideal refinement: Promisify everything or use a wrapper.
-                            });
-                        });
-                    }
-                    resolve();
-                });
+        await prisma.$transaction(async (tx) => {
+            // 1. Record the quiz result
+            await tx.quiz_results.create({
+                data: {
+                    user_id: userId,
+                    lesson_id: lessonId,
+                    score,
+                    total_questions,
+                    passed: !!passed,
+                    answers: JSON.stringify(answers || []),
+                    completed_at: new Date()
+                }
             });
+
+            // 2. If passed, complete the lesson
+            if (passed) {
+                const lesson = await tx.lessons.findUnique({
+                    where: { id: lessonId },
+                    select: { xp_reward: true }
+                });
+                const xpReward = lesson?.xp_reward || 0;
+
+                await tx.lesson_progress.upsert({
+                    where: {
+                        user_id_lesson_id: {
+                            user_id: userId,
+                            lesson_id: lessonId
+                        }
+                    },
+                    update: {
+                        is_completed: true,
+                        progress: 100,
+                        completed_at: new Date(),
+                        xp_earned: { increment: 0 }, // Should ideally handle max(xp_earned, xpReward)
+                        updated_at: new Date()
+                    },
+                    create: {
+                        user_id: userId,
+                        lesson_id: lessonId,
+                        is_completed: true,
+                        progress: 100,
+                        completed_at: new Date(),
+                        xp_earned: xpReward,
+                        updated_at: new Date()
+                    }
+                });
+
+                // Also update user XP if passed
+                if (xpReward > 0) {
+                    await tx.users.update({
+                        where: { id: userId },
+                        data: { total_xp: { increment: xpReward } }
+                    });
+                }
+            }
         });
+
         res.json({ success: true, message: 'Quiz submitted' });
     } catch (error) {
         console.error('Quiz submission error:', error);
@@ -484,21 +472,18 @@ const submitQuiz = async (req, res) => {
 };
 
 const submitFlag = async (req, res) => {
-    const { lesson_id, flag } = req.body;
-
-    if (!lesson_id || !flag) {
-        return res.status(400).json({ error: 'Lesson ID and Flag are required' });
-    }
-
-    const userId = req.user.id;
-
     try {
-        // Fetch the lesson's expected flag and XP
-        const lesson = await new Promise((resolve, reject) => {
-            db.get('SELECT flag, xp_reward FROM lessons WHERE id = ?', [lesson_id], (err, row) => {
-                if (err) reject(err);
-                else resolve(row);
-            });
+        const { lesson_id, flag } = req.body;
+        const userId = req.user.id;
+        const lId = parseInt(lesson_id);
+
+        if (!lId || !flag) {
+            return res.status(400).json({ error: 'Lesson ID and Flag are required' });
+        }
+
+        const lesson = await prisma.lessons.findUnique({
+            where: { id: lId },
+            select: { flag: true, xp_reward: true, title: true }
         });
 
         if (!lesson) {
@@ -509,45 +494,57 @@ const submitFlag = async (req, res) => {
             return res.status(400).json({ error: 'This lesson does not require a flag' });
         }
 
-        // Validate the flag (case sensitive)
         if (flag.trim() === lesson.flag) {
             const xpReward = lesson.xp_reward || 10;
 
-            // Check if already completed
-            const alreadyCompleted = await new Promise((resolve, reject) => {
-                db.get('SELECT id FROM lesson_progress WHERE user_id = ? AND lesson_id = ? AND is_completed = 1',
-                    [userId, lesson_id], (err, row) => {
-                        if (err) reject(err);
-                        else resolve(row);
-                    });
+            const alreadyCompleted = await prisma.lesson_progress.findFirst({
+                where: { user_id: userId, lesson_id: lId, is_completed: true }
             });
 
             if (alreadyCompleted) {
                 return res.json({ success: true, message: 'Flag correct, but lesson already completed.', xpAwarded: 0 });
             }
 
-            // Mark completed and award XP
-            await new Promise((resolve, reject) => {
-                db.run(`
-                    INSERT INTO lesson_progress (user_id, lesson_id, is_completed, progress, completed_at, xp_earned, updated_at)
-                    VALUES (?, ?, 1, 100, datetime('now'), ?, datetime('now'))
-                    ON CONFLICT(user_id, lesson_id) DO UPDATE SET
-                    is_completed = 1,
-                    progress = 100,
-                    completed_at = datetime('now'),
-                    xp_earned = max(xp_earned, ?),
-                    updated_at = datetime('now')
-                `, [userId, lesson_id, xpReward, xpReward], function (err) {
-                    if (err) reject(err);
-                    else resolve();
+            await prisma.$transaction(async (tx) => {
+                await tx.lesson_progress.upsert({
+                    where: {
+                        user_id_lesson_id: {
+                            user_id: userId,
+                            lesson_id: lId
+                        }
+                    },
+                    update: {
+                        is_completed: true,
+                        progress: 100,
+                        completed_at: new Date(),
+                        xp_earned: xpReward,
+                        updated_at: new Date()
+                    },
+                    create: {
+                        user_id: userId,
+                        lesson_id: lId,
+                        is_completed: true,
+                        progress: 100,
+                        completed_at: new Date(),
+                        xp_earned: xpReward,
+                        updated_at: new Date()
+                    }
                 });
-            });
 
-            // Update user's Total XP
-            await new Promise((resolve, reject) => {
-                db.run('UPDATE users SET total_xp = total_xp + ? WHERE id = ?', [xpReward, userId], (err) => {
-                    if (err) reject(err);
-                    else resolve();
+                await tx.users.update({
+                    where: { id: userId },
+                    data: { total_xp: { increment: xpReward } }
+                });
+
+                await tx.xp_transactions.create({
+                    data: {
+                        user_id: userId,
+                        xp_amount: xpReward,
+                        source: 'lessons',
+                        reference_id: lId,
+                        description: `Flag Correct: ${lesson.title}`,
+                        created_at: new Date()
+                    }
                 });
             });
 
@@ -564,77 +561,55 @@ const submitFlag = async (req, res) => {
 };
 
 const getSyllabus = async (req, res) => {
-    const query = `
-        SELECT 
-            t.id as track_id, t.title as track_title, t.icon as track_icon, t.description as track_desc,
-            c.id as course_id, c.title as course_title,
-            u.id as unit_id, u.title as unit_title,
-            l.id as lesson_id, l.title as lesson_title, l.xp_reward,
-            l.is_interactive, l.next_lesson_id, l.sort_order,
-            l.content, l.video_url, l.quiz_config, l.terminal_config
-        FROM tracks t
-        LEFT JOIN courses c ON c.track_id = t.id
-        LEFT JOIN units u ON u.course_id = c.id
-        LEFT JOIN lessons l ON l.unit_id = u.id
-        ORDER BY t.id, c.id, u.id, l.sort_order ASC
-    `;
-
     try {
-        const rows = await new Promise((resolve, reject) => {
-            db.all(query, [], (err, rows) => {
-                if (err) reject(err);
-                else resolve(rows);
-            });
-        });
-
-        const syllabus = [];
-        const trackMap = new Map();
-        const courseMap = new Map();
-        const unitMap = new Map();
-
-        (rows || []).forEach(row => {
-            if (!row.track_id) return;
-
-            if (!trackMap.has(row.track_id)) {
-                const track = {
-                    id: row.track_id, title: row.track_title,
-                    icon: row.track_icon, description: row.track_desc,
-                    courses: []
-                };
-                trackMap.set(row.track_id, track);
-                syllabus.push(track);
-            }
-
-            if (row.course_id && !courseMap.has(row.course_id)) {
-                const course = { id: row.course_id, title: row.course_title, units: [] };
-                courseMap.set(row.course_id, course);
-                trackMap.get(row.track_id).courses.push(course);
-            }
-
-            if (row.unit_id && !unitMap.has(row.unit_id)) {
-                const unit = { id: row.unit_id, title: row.unit_title, lessons: [] };
-                unitMap.set(row.unit_id, unit);
-                if (courseMap.has(row.course_id)) {
-                    courseMap.get(row.course_id).units.push(unit);
+        const tracks = await prisma.tracks.findMany({
+            include: {
+                courses: {
+                    orderBy: { sort_order: 'asc' },
+                    include: {
+                        units: {
+                            orderBy: { sort_order: 'asc' },
+                            include: {
+                                lessons: {
+                                    orderBy: { sort_order: 'asc' }
+                                }
+                            }
+                        }
+                    }
                 }
-            }
-
-            if (row.lesson_id && unitMap.has(row.unit_id)) {
-                unitMap.get(row.unit_id).lessons.push({
-                    id: row.lesson_id, title: row.lesson_title,
-                    xp_reward: row.xp_reward,
-                    is_interactive: row.is_interactive,
-                    next_lesson_id: row.next_lesson_id,
-                    sort_order: row.sort_order,
-                    content: row.content, video_url: row.video_url,
-                    quiz_config: row.quiz_config,
-                    terminal_config: row.terminal_config
-                });
-            }
+            },
+            orderBy: { id: 'asc' }
         });
+
+        // Transform to match the nested format expected by frontend if needed
+        const syllabus = tracks.map(track => ({
+            id: track.id,
+            title: track.title,
+            icon: track.icon,
+            description: track.description,
+            courses: track.courses.map(course => ({
+                id: course.id,
+                title: course.title,
+                units: course.units.map(unit => ({
+                    id: unit.id,
+                    title: unit.title,
+                    lessons: unit.lessons.map(lesson => ({
+                        id: lesson.id,
+                        title: lesson.title,
+                        xp_reward: lesson.xp_reward,
+                        is_interactive: lesson.is_interactive,
+                        next_lesson_id: lesson.next_lesson_id,
+                        sort_order: lesson.sort_order,
+                        content: lesson.content,
+                        video_url: lesson.video_url,
+                        quiz_config: lesson.quiz_config,
+                        terminal_config: lesson.terminal_config
+                    }))
+                }))
+            }))
+        }));
 
         res.json(syllabus);
-
     } catch (error) {
         console.error('Error fetching syllabus:', error);
         res.status(500).json({ error: error.message });
@@ -642,21 +617,19 @@ const getSyllabus = async (req, res) => {
 };
 
 const getLatestKnowledge = async (req, res) => {
-    const safeGet = (sql, params = []) => new Promise((resolve) => {
-        db.get(sql, params, (err, row) => {
-            if (err) { console.error('[getLatestKnowledge] SQL error:', err.message); resolve(null); }
-            else resolve(row || null);
-        });
-    });
-
     try {
-        const [latestTrack, latestCourse, latestArticle] = await Promise.all([
-            safeGet('SELECT id, title, description, icon as image, "track" as type, created_at FROM tracks ORDER BY created_at DESC LIMIT 1'),
-            safeGet('SELECT id, title, description, thumbnail_url as image, "course" as type, created_at FROM recorded_courses ORDER BY created_at DESC LIMIT 1'),
-            safeGet('SELECT id, title, description, cover_image as image, "article" as type, created_at FROM articles ORDER BY created_at DESC LIMIT 1'),
+        const [latestTrack, latestRecordedCourse, latestArticle] = await Promise.all([
+            prisma.tracks.findFirst({ orderBy: { created_at: 'desc' } }),
+            prisma.recorded_courses.findFirst({ orderBy: { created_at: 'desc' } }),
+            prisma.articles.findFirst({ orderBy: { created_at: 'desc' } })
         ]);
 
-        const latestItems = [latestTrack, latestCourse, latestArticle].filter(Boolean);
+        const latestItems = [
+            latestTrack && { id: latestTrack.id, title: latestTrack.title, description: latestTrack.description, image: latestTrack.icon, type: 'track', created_at: latestTrack.created_at },
+            latestRecordedCourse && { id: latestRecordedCourse.id, title: latestRecordedCourse.title, description: latestRecordedCourse.description, image: latestRecordedCourse.thumbnail_url, type: 'course', created_at: latestRecordedCourse.created_at },
+            latestArticle && { id: latestArticle.id, title: latestArticle.title, description: latestArticle.description, image: latestArticle.cover_image, type: 'article', created_at: latestArticle.created_at }
+        ].filter(Boolean);
+
         res.json({ success: true, latest: latestItems });
     } catch (error) {
         console.error('Error fetching latest knowledge:', error);

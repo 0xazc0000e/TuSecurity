@@ -1,154 +1,189 @@
-const { db } = require('../models/database');
+const { prisma } = require('../models/prismaDatabase');
 
 // Toggle Like
-const toggleLike = (req, res) => {
-    const { type, itemId } = req.body;
-    const userId = req.user.id;
+const toggleLike = async (req, res) => {
+    try {
+        const { type, itemId } = req.body;
+        const userId = req.user.id;
 
-    if (!['news', 'article', 'lesson'].includes(type)) {
-        return res.status(400).json({ error: 'Invalid item type' });
-    }
+        if (!['news', 'article', 'lesson'].includes(type)) {
+            return res.status(400).json({ error: 'Invalid item type' });
+        }
 
-    db.get('SELECT id FROM user_likes WHERE user_id = ? AND item_type = ? AND item_id = ?',
-        [userId, type, itemId], (err, row) => {
-            if (err) return res.status(500).json({ error: err.message });
-
-            if (row) {
-                // Unlike
-                db.run('DELETE FROM user_likes WHERE id = ?', [row.id], (err) => {
-                    if (err) return res.status(500).json({ error: err.message });
-                    res.json({ liked: false });
-                });
-            } else {
-                // Like
-                db.run('INSERT INTO user_likes (user_id, item_type, item_id) VALUES (?, ?, ?)',
-                    [userId, type, itemId], (err) => {
-                        if (err) return res.status(500).json({ error: err.message });
-                        res.json({ liked: true });
-                    });
+        const existingLike = await prisma.user_likes.findFirst({
+            where: {
+                user_id: userId,
+                item_type: type,
+                item_id: parseInt(itemId)
             }
         });
+
+        if (existingLike) {
+            // Unlike
+            await prisma.user_likes.delete({
+                where: { id: existingLike.id }
+            });
+            res.json({ liked: false });
+        } else {
+            // Like
+            await prisma.user_likes.create({
+                data: {
+                    user_id: userId,
+                    item_type: type,
+                    item_id: parseInt(itemId)
+                }
+            });
+            res.json({ liked: true });
+        }
+    } catch (err) {
+        console.error('Toggle like error:', err);
+        res.status(500).json({ error: err.message });
+    }
 };
 
 // Toggle Bookmark
-const toggleBookmark = (req, res) => {
-    const { type, itemId } = req.body;
-    const userId = req.user.id;
+const toggleBookmark = async (req, res) => {
+    try {
+        const { type, itemId } = req.body;
+        const userId = req.user.id;
 
-    if (!['news', 'article', 'lesson', 'course'].includes(type)) {
-        return res.status(400).json({ error: 'Invalid item type' });
-    }
+        if (!['news', 'article', 'lesson', 'course'].includes(type)) {
+            return res.status(400).json({ error: 'Invalid item type' });
+        }
 
-    db.get('SELECT id FROM user_bookmarks WHERE user_id = ? AND item_type = ? AND item_id = ?',
-        [userId, type, itemId], (err, row) => {
-            if (err) return res.status(500).json({ error: err.message });
-
-            if (row) {
-                // Remove Bookmark
-                db.run('DELETE FROM user_bookmarks WHERE id = ?', [row.id], (err) => {
-                    if (err) return res.status(500).json({ error: err.message });
-                    res.json({ bookmarked: false });
-                });
-            } else {
-                // Add Bookmark
-                db.run('INSERT INTO user_bookmarks (user_id, item_type, item_id) VALUES (?, ?, ?)',
-                    [userId, type, itemId], (err) => {
-                        if (err) return res.status(500).json({ error: err.message });
-                        res.json({ bookmarked: true });
-                    });
+        const existingBookmark = await prisma.user_bookmarks.findFirst({
+            where: {
+                user_id: userId,
+                item_type: type,
+                item_id: parseInt(itemId)
             }
         });
+
+        if (existingBookmark) {
+            // Remove Bookmark
+            await prisma.user_bookmarks.delete({
+                where: { id: existingBookmark.id }
+            });
+            res.json({ bookmarked: false });
+        } else {
+            // Add Bookmark
+            await prisma.user_bookmarks.create({
+                data: {
+                    user_id: userId,
+                    item_type: type,
+                    item_id: parseInt(itemId)
+                }
+            });
+            res.json({ bookmarked: true });
+        }
+    } catch (err) {
+        console.error('Toggle bookmark error:', err);
+        res.status(500).json({ error: err.message });
+    }
 };
 
 // Mark Viewed & Award XP (for simple items like News/Articles)
-const markViewed = (req, res) => {
-    const { type, itemId } = req.body;
-    const userId = req.user.id;
+const markViewed = async (req, res) => {
+    try {
+        const { type, itemId } = req.body;
+        const userId = req.user.id;
 
-    // specific XP rewards for simple views
-    const rewards = {
-        'news': 3,
-        'article': 8
-    };
+        // specific XP rewards for simple views
+        const rewards = {
+            'news': 3,
+            'article': 8
+        };
 
-    if (!rewards[type]) {
-        return res.status(400).json({ error: 'Invalid item type for view tracking' });
-    }
+        if (!rewards[type]) {
+            return res.status(400).json({ error: 'Invalid item type for view tracking' });
+        }
 
-    // Check if already viewed/completed to avoid duplicate XP
-    // For simplicity, we can use user_lesson_completion table logic or a new table.
-    // However, the schema has 'user_lesson_completion'. For generic content, we might need a 'user_content_completion' or similar.
-    // But since the user schema has 'user_lesson_completion' which is specific to lessons,
-    // and 'user_progress' for simulators.
-    // Let's reuse 'user_lesson_completion' if we generalize it, OR create a simple 'user_content_log' if not exists.
-    // The current schema has 'logs' table but it's for audit.
-    // The current schema has 'user_enrollments' but that's for courses.
+        const actionKey = `${type}_complete_${itemId}`;
 
-    // Let's implement a simple check using a new table or existing one.
-    // The schema provided earlier didn't have a generic 'content_completion'.
-    // We will use 'logs' to check if action was 'view_complete' for this item to prevent duplicate XP.
+        const existingLog = await prisma.logs.findFirst({
+            where: {
+                user_id: userId,
+                action: actionKey
+            }
+        });
 
-    const actionKey = `${type}_complete_${itemId}`;
-
-    db.get('SELECT id FROM logs WHERE user_id = ? AND action = ?', [userId, actionKey], (err, row) => {
-        if (err) return res.status(500).json({ error: err.message });
-        if (row) return res.json({ message: 'Already viewed', xpAwarded: 0 });
+        if (existingLog) {
+            return res.json({ message: 'Already viewed', xpAwarded: 0 });
+        }
 
         // Award XP
         const xp = rewards[type];
-        db.serialize(() => {
-            db.run('UPDATE users SET total_xp = total_xp + ? WHERE id = ?', [xp, userId]);
-            db.run('INSERT INTO logs (user_id, action, resource_type, resource_id, details) VALUES (?, ?, ?, ?, ?)',
-                [userId, actionKey, type, itemId, `Completed ${type} and earned ${xp} XP`]);
 
-            res.json({ message: 'View recorded', xpAwarded: xp });
-        });
-    });
+        await prisma.$transaction([
+            prisma.users.update({
+                where: { id: userId },
+                data: { total_xp: { increment: xp } }
+            }),
+            prisma.logs.create({
+                data: {
+                    user_id: userId,
+                    action: actionKey,
+                    resource_type: type,
+                    resource_id: parseInt(itemId),
+                    details: `Completed ${type} and earned ${xp} XP`
+                }
+            })
+        ]);
+
+        res.json({ message: 'View recorded', xpAwarded: xp });
+    } catch (err) {
+        console.error('Mark viewed error:', err);
+        res.status(500).json({ error: err.message });
+    }
 };
 
 // Get User Interactions (Likes & Bookmarks)
-const getUserInteractions = (req, res) => {
-    const userId = req.user.id;
+const getUserInteractions = async (req, res) => {
+    try {
+        const userId = req.user.id;
 
-    const query = `
-        SELECT 'like' as interaction_type, item_type, item_id FROM user_likes WHERE user_id = ?
-        UNION ALL
-        SELECT 'bookmark' as interaction_type, item_type, item_id FROM user_bookmarks WHERE user_id = ?
-    `;
+        const [likes, bookmarks] = await Promise.all([
+            prisma.user_likes.findMany({ where: { user_id: userId } }),
+            prisma.user_bookmarks.findMany({ where: { user_id: userId } })
+        ]);
 
-    db.all(query, [userId, userId], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-
-        // Transform to easier format: { likes: { news: [1,2], ... }, bookmarks: { ... } }
         const result = {
             likes: {},
             bookmarks: {}
         };
 
-        rows.forEach(row => {
-            const cat = row.interaction_type === 'like' ? result.likes : result.bookmarks;
-            if (!cat[row.item_type]) cat[row.item_type] = [];
-            cat[row.item_type].push(row.item_id);
+        likes.forEach(row => {
+            if (!result.likes[row.item_type]) result.likes[row.item_type] = [];
+            result.likes[row.item_type].push(row.item_id);
+        });
+
+        bookmarks.forEach(row => {
+            if (!result.bookmarks[row.item_type]) result.bookmarks[row.item_type] = [];
+            result.bookmarks[row.item_type].push(row.item_id);
         });
 
         res.json(result);
-    });
+    } catch (err) {
+        console.error('Get user interactions error:', err);
+        res.status(500).json({ error: err.message });
+    }
 };
 
 // Get User Saved Items (Detailed)
-const getSavedItems = (req, res) => {
-    const userId = req.user.id;
+const getSavedItems = async (req, res) => {
+    try {
+        const userId = req.user.id;
 
-    // This is a bit complex as we need to join with different tables based on type.
-    // For now, let's fetch bookmarks and then fetch details.
-    // Or we can just return the IDs and let frontend fetch details (simpler but more requests).
-    // Better: Fetch bookmarks with some metadata if possible.
+        const bookmarks = await prisma.user_bookmarks.findMany({
+            where: { user_id: userId },
+            orderBy: { created_at: 'desc' }
+        });
 
-    // Let's return the bookmarks list.
-    db.all('SELECT * FROM user_bookmarks WHERE user_id = ? ORDER BY created_at DESC', [userId], (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows);
-    });
+        res.json(bookmarks);
+    } catch (err) {
+        console.error('Get saved items error:', err);
+        res.status(500).json({ error: err.message });
+    }
 };
 
 module.exports = {

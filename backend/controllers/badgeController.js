@@ -1,5 +1,4 @@
-const { requireAuth } = require('../middleware/rbacMiddleware');
-const { db } = require('../models/database');
+const { prisma } = require('../models/prismaDatabase');
 const { getAllBadges, getUserBadges, checkAndAwardBadges } = require('../services/badgeService');
 
 // Get all available badges
@@ -46,22 +45,22 @@ exports.getBadgeProgress = async (req, res) => {
     try {
         const userId = req.user.id;
 
-        // Get user stats
-        const userStats = await new Promise((resolve, reject) => {
-            db.get(`
-                SELECT 
-                    u.total_xp,
-                    (SELECT COUNT(*) FROM lesson_progress WHERE user_id = u.id AND is_completed = 1) as completed_lessons,
-                    (SELECT current_streak FROM user_streaks WHERE user_id = u.id) as streak,
-                    (SELECT COUNT(*) FROM user_activity WHERE user_id = u.id AND activity_type = 'simulator_completed') as completed_simulators,
-                    (SELECT COUNT(*) FROM event_registrations WHERE user_id = u.id) as attended_events
-                FROM users u
-                WHERE u.id = ?
-            `, [userId], (err, row) => {
-                if (err) reject(err);
-                else resolve(row || {});
-            });
-        });
+        // Get user stats using Prisma
+        const [totalXp, completedLessons, streak, completedSimulators, attendedEvents] = await Promise.all([
+            prisma.users.findUnique({ where: { id: userId }, select: { total_xp: true } }).then(u => u?.total_xp || 0),
+            prisma.lesson_progress.count({ where: { user_id: userId, is_completed: true } }),
+            prisma.user_streaks.findUnique({ where: { user_id: userId }, select: { current_streak: true } }).then(s => s?.current_streak || 0),
+            prisma.user_activity.count({ where: { user_id: userId, activity_type: 'simulator_completed' } }),
+            prisma.event_registrations.count({ where: { user_id: userId } })
+        ]);
+
+        const userStats = {
+            total_xp: totalXp,
+            completed_lessons: completedLessons,
+            streak: streak,
+            completed_simulators: completedSimulators,
+            attended_events: attendedEvents
+        };
 
         // Get all badges
         const allBadges = await getAllBadges();
@@ -123,20 +122,22 @@ exports.createBadge = async (req, res) => {
             return res.status(400).json({ success: false, error: 'Missing required fields' });
         }
 
-        const result = await new Promise((resolve, reject) => {
-            db.run(`
-                INSERT INTO badges (name, description, icon, color, requirement_type, requirement_value, xp_reward)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            `, [name, description, icon || '🏅', color || '#f59e0b', requirement_type, requirement_value, xp_reward || 50], function(err) {
-                if (err) reject(err);
-                else resolve(this.lastID);
-            });
+        const badge = await prisma.badges.create({
+            data: {
+                name,
+                description,
+                icon: icon || '🏅',
+                color: color || '#f59e0b',
+                requirement_type,
+                requirement_value,
+                xp_reward: xp_reward || 50
+            }
         });
 
         res.status(201).json({
             success: true,
             message: 'Badge created successfully',
-            badgeId: result
+            badgeId: badge.id
         });
     } catch (error) {
         console.error('Error creating badge:', error);
@@ -149,15 +150,15 @@ exports.deleteBadge = async (req, res) => {
     try {
         const { id } = req.params;
 
-        await new Promise((resolve, reject) => {
-            db.run('DELETE FROM badges WHERE id = ?', [id], (err) => {
-                if (err) reject(err);
-                else resolve();
-            });
+        await prisma.badges.delete({
+            where: { id: parseInt(id) }
         });
 
         res.json({ success: true, message: 'Badge deleted successfully' });
     } catch (error) {
+        if (error.code === 'P2025') {
+            return res.status(404).json({ success: false, error: 'Badge not found' });
+        }
         console.error('Error deleting badge:', error);
         res.status(500).json({ success: false, error: 'Failed to delete badge' });
     }

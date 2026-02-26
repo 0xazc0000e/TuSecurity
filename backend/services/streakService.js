@@ -1,4 +1,4 @@
-const { db } = require('../models/database');
+const { prisma } = require('../models/prismaDatabase');
 
 // Update user streak when they complete an activity
 const updateStreak = async (userId) => {
@@ -6,18 +6,13 @@ const updateStreak = async (userId) => {
         const today = new Date().toISOString().split('T')[0];
 
         // Get current streak data
-        const streakData = await new Promise((resolve, reject) => {
-            db.get(
-                `SELECT current_streak, longest_streak, last_activity_date 
-                 FROM user_streaks 
-                 WHERE user_id = ?`,
-                [userId],
-                (err, row) => {
-                    if (err) reject(err);
-                    else resolve(row || { current_streak: 0, longest_streak: 0, last_activity_date: null });
-                }
-            );
+        let streakData = await prisma.user_streaks.findUnique({
+            where: { user_id: userId }
         });
+
+        if (!streakData) {
+            streakData = { current_streak: 0, longest_streak: 0, last_activity_date: null };
+        }
 
         let { current_streak, longest_streak, last_activity_date } = streakData;
 
@@ -51,19 +46,22 @@ const updateStreak = async (userId) => {
             longest_streak = current_streak;
         }
 
-        // Save to database
-        await new Promise((resolve, reject) => {
-            db.run(
-                `INSERT INTO user_streaks (user_id, current_streak, longest_streak, last_activity_date, updated_at)
-                 VALUES (?, ?, ?, ?, datetime('now'))
-                 ON CONFLICT(user_id) DO UPDATE SET
-                 current_streak = ?, longest_streak = ?, last_activity_date = ?, updated_at = datetime('now')`,
-                [userId, current_streak, longest_streak, today, current_streak, longest_streak, today],
-                function(err) {
-                    if (err) reject(err);
-                    else resolve();
-                }
-            );
+        // Save to database using upsert
+        await prisma.user_streaks.upsert({
+            where: { user_id: userId },
+            update: {
+                current_streak,
+                longest_streak,
+                last_activity_date: today,
+                updated_at: new Date()
+            },
+            create: {
+                user_id: userId,
+                current_streak,
+                longest_streak,
+                last_activity_date: today,
+                updated_at: new Date()
+            }
         });
 
         return {
@@ -81,20 +79,11 @@ const updateStreak = async (userId) => {
 // Get user streak data
 const getStreak = async (userId) => {
     try {
-        const streakData = await new Promise((resolve, reject) => {
-            db.get(
-                `SELECT current_streak, longest_streak, last_activity_date 
-                 FROM user_streaks 
-                 WHERE user_id = ?`,
-                [userId],
-                (err, row) => {
-                    if (err) reject(err);
-                    else resolve(row || { current_streak: 0, longest_streak: 0, last_activity_date: null });
-                }
-            );
+        const streakData = await prisma.user_streaks.findUnique({
+            where: { user_id: userId }
         });
 
-        return streakData;
+        return streakData || { current_streak: 0, longest_streak: 0, last_activity_date: null };
     } catch (error) {
         console.error('Error getting streak:', error);
         return { current_streak: 0, longest_streak: 0, last_activity_date: null };
@@ -112,30 +101,23 @@ const awardStreakBonus = async (userId, streak) => {
         else if (streak >= 3) bonusXP = 10;
 
         if (bonusXP > 0) {
-            // Add XP transaction
-            await new Promise((resolve, reject) => {
-                db.run(
-                    `INSERT INTO xp_transactions (user_id, xp_amount, source, description, created_at)
-                     VALUES (?, ?, 'streakBonus', ?, datetime('now'))`,
-                    [userId, bonusXP, `${streak} day streak bonus!`],
-                    function(err) {
-                        if (err) reject(err);
-                        else resolve();
+            await prisma.$transaction([
+                // Add XP transaction
+                prisma.xp_transactions.create({
+                    data: {
+                        user_id: userId,
+                        xp_amount: bonusXP,
+                        source: 'streakBonus',
+                        description: `${streak} day streak bonus!`,
+                        created_at: new Date()
                     }
-                );
-            });
-
-            // Update user total XP
-            await new Promise((resolve, reject) => {
-                db.run(
-                    `UPDATE users SET total_xp = total_xp + ? WHERE id = ?`,
-                    [bonusXP, userId],
-                    function(err) {
-                        if (err) reject(err);
-                        else resolve();
-                    }
-                );
-            });
+                }),
+                // Update user total XP
+                prisma.users.update({
+                    where: { id: userId },
+                    data: { total_xp: { increment: bonusXP } }
+                })
+            ]);
         }
 
         return bonusXP;

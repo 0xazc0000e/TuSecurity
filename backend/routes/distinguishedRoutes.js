@@ -1,61 +1,85 @@
 const express = require('express');
 const router = express.Router();
-const { db } = require('../models/database');
+const { prisma } = require('../models/prismaDatabase');
 
 // ═══════════════════════════════════════════════
 // DISTINGUISHED MEMBERS
 // ═══════════════════════════════════════════════
 
 // GET all members (optional ?month=YYYY-MM filter)
-router.get('/', (req, res) => {
-    const { month } = req.query;
-    let sql = 'SELECT * FROM distinguished_members';
-    const params = [];
-    if (month) {
-        sql += ' WHERE month = ?';
-        params.push(month);
+router.get('/', async (req, res) => {
+    try {
+        const { month } = req.query;
+        const where = {};
+        if (month) {
+            where.month = month;
+        }
+
+        const members = await prisma.distinguished_members.findMany({
+            where,
+            orderBy: { created_at: 'desc' }
+        });
+
+        res.json(members);
+    } catch (err) {
+        console.error('Get members error:', err);
+        res.status(500).json({ error: 'Failed to fetch members' });
     }
-    sql += ' ORDER BY created_at DESC';
-    db.all(sql, params, (err, rows) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json(rows || []);
-    });
 });
 
 // GET available months
-router.get('/months', (req, res) => {
-    db.all(
-        'SELECT DISTINCT month FROM distinguished_members ORDER BY month DESC',
-        [],
-        (err, rows) => {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json((rows || []).map(r => r.month));
-        }
-    );
+router.get('/months', async (req, res) => {
+    try {
+        const rows = await prisma.distinguished_members.findMany({
+            select: { month: true },
+            distinct: ['month'],
+            orderBy: { month: 'desc' }
+        });
+        res.json(rows.map(r => r.month));
+    } catch (err) {
+        console.error('Get months error:', err);
+        res.status(500).json({ error: 'Failed to fetch months' });
+    }
 });
 
 // POST create member (admin)
-router.post('/', (req, res) => {
-    const { name, committee, month, reason, color } = req.body;
-    if (!name || !month) return res.status(400).json({ error: 'name and month are required' });
-    db.run(
-        'INSERT INTO distinguished_members (name, committee, month, reason, color) VALUES (?, ?, ?, ?, ?)',
-        [name, committee || null, month, reason || null, color || '#f59e0b'],
-        function (err) {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ id: this.lastID, message: 'Member added' });
-        }
-    );
+router.post('/', async (req, res) => {
+    try {
+        const { name, committee, month, reason, color } = req.body;
+        if (!name || !month) return res.status(400).json({ error: 'name and month are required' });
+
+        const member = await prisma.distinguished_members.create({
+            data: {
+                name,
+                committee: committee || null,
+                month,
+                reason: reason || null,
+                color: color || '#f59e0b'
+            }
+        });
+
+        res.json({ id: member.id, message: 'Member added' });
+    } catch (err) {
+        console.error('Create member error:', err);
+        res.status(500).json({ error: 'Failed to add member' });
+    }
 });
 
 // DELETE member (admin)
-router.delete('/:id', (req, res) => {
-    // Also delete their messages
-    db.run('DELETE FROM anonymous_messages WHERE member_id = ?', [req.params.id]);
-    db.run('DELETE FROM distinguished_members WHERE id = ?', [req.params.id], function (err) {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ deleted: this.changes });
-    });
+router.delete('/:id', async (req, res) => {
+    try {
+        const memberId = parseInt(req.params.id);
+
+        await prisma.$transaction([
+            prisma.anonymous_messages.deleteMany({ where: { member_id: memberId } }),
+            prisma.distinguished_members.delete({ where: { id: memberId } })
+        ]);
+
+        res.json({ success: true, message: 'Member deleted' });
+    } catch (err) {
+        console.error('Delete member error:', err);
+        res.status(500).json({ error: 'Failed to delete member' });
+    }
 });
 
 // ═══════════════════════════════════════════════
@@ -63,30 +87,39 @@ router.delete('/:id', (req, res) => {
 // ═══════════════════════════════════════════════
 
 // GET messages for a member
-router.get('/:id/messages', (req, res) => {
-    db.all(
-        'SELECT id, message, created_at FROM anonymous_messages WHERE member_id = ? ORDER BY created_at DESC',
-        [req.params.id],
-        (err, rows) => {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json(rows || []);
-        }
-    );
+router.get('/:id/messages', async (req, res) => {
+    try {
+        const rows = await prisma.anonymous_messages.findMany({
+            where: { member_id: parseInt(req.params.id) },
+            orderBy: { created_at: 'desc' },
+            select: { id: true, message: true, created_at: true }
+        });
+        res.json(rows);
+    } catch (err) {
+        console.error('Get messages error:', err);
+        res.status(500).json({ error: 'Failed to fetch messages' });
+    }
 });
 
 // POST anonymous message
-router.post('/:id/messages', (req, res) => {
-    const { message } = req.body;
-    if (!message || message.trim().length === 0) return res.status(400).json({ error: 'message is required' });
-    if (message.length > 200) return res.status(400).json({ error: 'message too long (max 200 chars)' });
-    db.run(
-        'INSERT INTO anonymous_messages (member_id, message) VALUES (?, ?)',
-        [req.params.id, message.trim()],
-        function (err) {
-            if (err) return res.status(500).json({ error: err.message });
-            res.json({ id: this.lastID, message: 'Message sent' });
-        }
-    );
+router.post('/:id/messages', async (req, res) => {
+    try {
+        const { message } = req.body;
+        if (!message || message.trim().length === 0) return res.status(400).json({ error: 'message is required' });
+        if (message.length > 200) return res.status(400).json({ error: 'message too long (max 200 chars)' });
+
+        const msg = await prisma.anonymous_messages.create({
+            data: {
+                member_id: parseInt(req.params.id),
+                message: message.trim()
+            }
+        });
+
+        res.json({ id: msg.id, message: 'Message sent' });
+    } catch (err) {
+        console.error('Send message error:', err);
+        res.status(500).json({ error: 'Failed to send message' });
+    }
 });
 
 module.exports = router;
