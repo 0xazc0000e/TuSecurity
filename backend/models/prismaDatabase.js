@@ -1,9 +1,5 @@
-const { PrismaClient } = require('../prisma/generated/prisma');
-
-// Initialize Prisma Client
-const prisma = new PrismaClient({
-  log: ['query', 'info', 'warn', 'error'],
-});
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
 
 // Test database connection
 async function testConnection() {
