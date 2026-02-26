@@ -39,22 +39,27 @@ exports.register = async (req, res) => {
 
         // Check if user exists
         try {
-            const existingUser = await prisma.users.findUnique({
+            const existingEmail = await prisma.users.findUnique({
                 where: { email: email }
             });
-            
-            if (existingUser) return res.status(400).json({ error: 'Email already registered' });
+            if (existingEmail) return res.status(400).json({ error: 'البريد الإلكتروني مسجل بالفعل' });
+
+            // Using the provided username from body or generating one
+            let finalUsername = req.body.username || fullName;
+
+            // Check if username exists
+            const existingUsername = await prisma.users.findUnique({
+                where: { username: finalUsername }
+            });
+
+            if (existingUsername) {
+                // If collision, append random numbers if it was generated/default
+                finalUsername = `${finalUsername}_${Math.floor(Math.random() * 1000)}`;
+            }
 
             // Hash password
             const salt = await bcrypt.genSalt(10);
             const hashedPassword = await bcrypt.hash(password, salt);
-
-            // Use provided username or generate one if missing (fallback)
-            // The frontend sends 'username' in the body
-            let finalUsername = req.body.username;
-            if (!finalUsername) {
-                finalUsername = email.split('@')[0] + Math.floor(Math.random() * 1000);
-            }
 
             // Save to DB with verification code
             const verificationCode = generateVerificationCode();
@@ -69,7 +74,8 @@ exports.register = async (req, res) => {
                     verification_code: verificationCode,
                     verification_expires: verificationExpires,
                     is_verified: false,
-                    email_verified: 0
+                    email_verified: 0,
+                    student_id: req.body.university_id || null // Map university_id to student_id if provided
                 }
             });
 
@@ -87,8 +93,19 @@ exports.register = async (req, res) => {
                 requiresVerification: true
             });
         } catch (error) {
-            console.error('Database error:', error);
-            return res.status(500).json({ error: 'Database error' });
+            console.error('Registration Database error:', error);
+
+            // Handle Prisma unique constraint errors
+            if (error.code === 'P2002') {
+                const target = error.meta?.target?.[0] || '';
+                if (target.includes('email')) return res.status(400).json({ error: 'البريد الإلكتروني مسجل بالفعل' });
+                if (target.includes('username')) return res.status(400).json({ error: 'اسم المستخدم محجوز، جرب اسماً آخر' });
+            }
+
+            return res.status(500).json({
+                error: 'خطأ في قاعدة البيانات',
+                details: process.env.NODE_ENV === 'development' ? error.message : undefined
+            });
         }
     } catch (error) {
         console.error('Registration error:', error);
