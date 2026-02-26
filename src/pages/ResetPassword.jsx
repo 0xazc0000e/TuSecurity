@@ -4,7 +4,7 @@ import { Lock, AlertCircle, CheckCircle, ChevronLeft, Key } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { MatrixBackground } from '../components/ui/MatrixBackground';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://tusecurity.onrender.com/api';
+import { apiCall } from '../context/AuthContext';
 
 export default function ResetPassword() {
     const navigate = useNavigate();
@@ -23,24 +23,17 @@ export default function ResetPassword() {
         setSuccess('');
 
         try {
-            const response = await fetch(`${API_BASE_URL}/auth/reset-password`, {
+            await apiCall('/auth/reset-password', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email, code, newPassword })
             });
 
-            const data = await response.json();
-
-            if (response.ok) {
-                setSuccess('تم تغيير كلمة المرور بنجاح! جاري تحويلك لتسجيل الدخول...');
-                setTimeout(() => {
-                    navigate('/login');
-                }, 2000);
-            } else {
-                setError(data.error || 'فشل تغيير كلمة المرور.');
-            }
+            setSuccess('تم تغيير كلمة المرور بنجاح! جاري تحويلك لتسجيل الدخول...');
+            setTimeout(() => {
+                navigate('/login');
+            }, 2000);
         } catch (err) {
-            setError('لا يمكن الاتصال بالخادم.');
+            setError(err.message || 'لا يمكن الاتصال بالخادم.');
         } finally {
             setLoading(false);
         }

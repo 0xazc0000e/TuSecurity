@@ -4,11 +4,12 @@ import { User, Mail, Lock, Shield, ArrowLeft, CheckCircle, AlertCircle } from 'l
 import { useNavigate, Link } from 'react-router-dom';
 import { MatrixBackground } from '../components/ui/MatrixBackground';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://tusecurity.onrender.com/api';
+import { useAuth } from '../context/AuthContext';
 
 export default function Signup() {
     const navigate = useNavigate();
-    const [formData, setFormData] = useState({ fullName: '', email: '', password: '', confirmPassword: '' });
+    const { register } = useAuth();
+    const [formData, setFormData] = useState({ fullName: '', email: '', password: '', confirmPassword: '', universityId: '' });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState(false);
@@ -24,21 +25,17 @@ export default function Signup() {
 
         setLoading(true);
         try {
-            const res = await fetch(`${API_BASE_URL}/auth/register`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    fullName: formData.fullName,
-                    email: formData.email,
-                    password: formData.password
-                })
+            const result = await register({
+                username: formData.fullName, // Using fullName as username for now as per registration logic
+                email: formData.email,
+                password: formData.password,
+                universityId: formData.universityId
             });
-            const data = await res.json();
 
-            if (res.ok) {
+            if (result.success) {
                 setSuccess(true);
             } else {
-                setError(data.error || 'فشل إنشاء الحساب');
+                setError(result.error || 'فشل إنشاء الحساب');
             }
         } catch (err) {
             setError('خطأ في الاتصال');

@@ -5,11 +5,12 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { MatrixBackground } from '../components/ui/MatrixBackground';
 import { GoogleIcon, MicrosoftIcon } from '../components/ui/SocialIcons.jsx';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://tusecurity.onrender.com/api';
+import { useAuth } from '../context/AuthContext';
 
 export default function Login() {
     const navigate = useNavigate();
     const location = useLocation();
+    const { login } = useAuth();
     const [formData, setFormData] = useState({ email: '', password: '' });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -35,20 +36,14 @@ export default function Login() {
         setError('');
 
         try {
-            const res = await fetch(`${API_BASE_URL}/auth/login`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(formData)
-            });
-            const data = await res.json();
+            const result = await login(formData.email, formData.password);
 
-            if (res.ok) {
-                localStorage.setItem('token', data.token);
-                // Force reload to update AuthContext
-                const target = data.redirectTo === '/dashboard' ? '/profile' : data.redirectTo;
-                window.location.href = target || '/profile';
+            if (result.success) {
+                // Determine target redirect
+                const target = result.user?.bio ? '/profile' : '/complete-profile';
+                window.location.href = target;
             } else {
-                setError(data.error || 'فشل تسجيل الدخول');
+                setError(result.error || 'فشل تسجيل الدخول');
             }
         } catch (err) {
             setError('خطأ في الاتصال');
