@@ -21,6 +21,7 @@ const eventsRoutes = require('./routes/eventsRoutes');
 const interactionRoutes = require('./routes/interactionRoutes');
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 5000;
 
 const isDev = process.env.NODE_ENV !== 'production';
@@ -139,7 +140,7 @@ app.use((err, req, res, next) => {
     res.status(500).json({ error: err.message || 'Internal Server Error' });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '0.0.0.0', () => {
     console.log(`=================================`);
     console.log(`TUCC Backend Server Running`);
     console.log(`=================================`);
