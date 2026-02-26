@@ -4,7 +4,7 @@ import { Upload, ChevronLeft, Check } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { MatrixBackground } from '../components/ui/MatrixBackground';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://tusecurity.onrender.com/api';
+import { useAuth, API_BASE_URL } from '../context/AuthContext';
 
 const INTERESTS_LIST = [
     "اختبار الاختراق", "محلل مركز العمليات الأمنية (SOC)", "تحليل البرمجيات الخبيثة",
@@ -13,6 +13,7 @@ const INTERESTS_LIST = [
 ];
 
 export default function CompleteProfile() {
+    const { updateProfile } = useAuth();
     const navigate = useNavigate();
     const [bio, setBio] = useState('');
     const [interests, setInterests] = useState([]);
@@ -48,23 +49,13 @@ export default function CompleteProfile() {
         }
 
         try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(`${API_BASE_URL}/auth/complete-profile`, {
-                method: 'PUT',
-                headers: {
-                    'Authorization': `Bearer ${token}`
-                },
-                body: formData
-            });
-            const data = await res.json();
+            const result = await updateProfile(formData);
 
-            if (data.success || res.ok) {
-                // Determine redirect or default to dashboard
-                const redirect = data.redirectTo || '/profile';
-                // Force reload to update user state in AuthContext
-                window.location.href = (redirect === '/dashboard' ? '/profile' : redirect);
+            if (result.success) {
+                // Determine redirect or default to profile
+                navigate('/profile');
             } else {
-                alert('فشل التحديث');
+                alert('فشل التحديث: ' + result.error);
             }
         } catch (err) {
             console.error(err);
