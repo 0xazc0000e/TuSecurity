@@ -1,4 +1,4 @@
-const { PrismaClient } = require('@prisma/client');
+const { PrismaClient } = require('../prisma/generated/prisma');
 
 // Initialize Prisma Client
 const prisma = new PrismaClient({
