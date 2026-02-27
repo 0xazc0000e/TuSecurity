@@ -46,18 +46,19 @@ export default function ProtectedRoute({ children, requiredRole = 'student' }) {
 
     // Check role permissions if a specific role is required
     if (requiredRole) {
-        const userRole = user?.role?.toUpperCase() || 'STUDENT';
+        const rawRole = user?.role || 'STUDENT';
+        const userRole = rawRole.toUpperCase();
         const userEmail = user?.email?.toLowerCase() || '';
         const requiredRoleUpper = requiredRole.toUpperCase();
 
-        const userRoleLevel = ROLE_HIERARCHY[userRole] || 0;
-        const requiredRoleLevel = ROLE_HIERARCHY[requiredRoleUpper] || 0;
+        const userRoleLevel = ROLE_HIERARCHY[userRole] || 1; // Default to Student level if unknown
+        const requiredRoleLevel = ROLE_HIERARCHY[requiredRoleUpper] || 1;
 
         // Ultimate authority bypass for SUPER_ADMIN email (case-insensitive)
         const isSuperAdminEmail = userEmail === 'az.jo.fm@gmail.com';
 
         if (userRoleLevel < requiredRoleLevel && !isSuperAdminEmail) {
-            console.error(`[ProtectedRoute] Access Denied: User level (${userRoleLevel}) < Required level (${requiredRoleLevel}). Redirecting to home.`);
+            console.error(`[ProtectedRoute] ACCESS DENIED: User Role [${userRole}] (Level ${userRoleLevel}) < Required [${requiredRoleUpper}] (Level ${requiredRoleLevel}). Redirecting...`);
             return <Navigate to="/" replace />;
         }
     }

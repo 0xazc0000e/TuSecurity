@@ -3,7 +3,7 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://tusecurity.onrender.com';
 
 // Generic API call helper
-async function apiCall(endpoint, options = {}, token = null) {
+export async function apiCall(endpoint, options = {}, token = null) {
     // Ensure endpoint starts with /api for consistency
     const normalizedEndpoint = endpoint.startsWith('/api') ? endpoint : `/api${endpoint}`;
     const url = `${API_BASE_URL}${normalizedEndpoint}`;

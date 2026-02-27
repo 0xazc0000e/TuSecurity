@@ -29,15 +29,19 @@ export default function AdminAdvanced() {
 
     // Security Check
     useEffect(() => {
-        if (!user) return;
-        const role = user.role?.toUpperCase() || '';
+        if (!user || activeTab === 'loading') return; // Wait until user is specifically determined
+
+        const role = user.role?.toUpperCase() || 'STUDENT';
         const email = user.email?.toLowerCase() || '';
 
-        // Allowed if role level >= EDITOR (2) or if it's the SUPER_ADMIN email
         const ROLE_LEVELS = { 'STUDENT': 1, 'EDITOR': 2, 'MANAGER': 3, 'ADMIN': 4, 'SUPER_ADMIN': 5 };
-        const userLevel = ROLE_LEVELS[role] || 0;
+        const userLevel = ROLE_LEVELS[role] || 1;
 
-        if (userLevel < 2 && email !== 'az.jo.fm@gmail.com') {
+        // Allowed if role level >= EDITOR (2) or if it's the SUPER_ADMIN email
+        const isSuperAdmin = email === 'az.jo.fm@gmail.com' || role === 'SUPER_ADMIN';
+
+        if (userLevel < 2 && !isSuperAdmin) {
+            console.warn(`[Admin] Unauthorized access attempt by ${email} (${role}). Redirecting to home.`);
             navigate('/');
         }
     }, [user, navigate]);

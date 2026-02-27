@@ -45,11 +45,20 @@ export const AuthProvider = ({ children }) => {
     // Fetch user profile from real API
     const fetchProfile = useCallback(async () => {
         try {
+            console.log('[AuthContext] Fetching fresh profile...');
             const data = await apiCall('/auth/profile');
+
+            if (!data || typeof data !== 'object') {
+                throw new Error('Invalid profile data received');
+            }
+
             const normalizedUser = {
                 ...data,
-                role: data.role?.toUpperCase() || 'STUDENT'
+                role: (data.role || 'STUDENT').toUpperCase(),
+                email: data.email?.toLowerCase() || ''
             };
+
+            console.log(`[AuthContext] Profile fetched. Role: ${normalizedUser.role}`);
             setUser(normalizedUser);
             setIsAuthenticated(true);
 
@@ -57,15 +66,19 @@ export const AuthProvider = ({ children }) => {
             localStorage.setItem('user', JSON.stringify(normalizedUser));
             localStorage.setItem('isAuthenticated', 'true');
         } catch (error) {
-            console.error('Failed to fetch profile:', error);
-            // ONLY logout if it's an auth error, not a network error
+            console.error('[AuthContext] Failed to fetch profile:', error);
+
+            // Clear stale state if it's an authentication error
             if (error.data?.status === 401 || error.message.includes('401')) {
+                console.warn('[AuthContext] Session expired. Clearing state.');
                 localStorage.removeItem('token');
                 localStorage.removeItem('user');
                 localStorage.removeItem('isAuthenticated');
                 setUser(null);
                 setIsAuthenticated(false);
             }
+            // If it's a network error, we keep the stale state from initAuth to allow offline/slow access
+            // but we MUST ensure loading is eventually false
         } finally {
             setLoading(false);
         }
