@@ -25,7 +25,7 @@ async function apiCall(endpoint, options = {}, token = null) {
         delete config.headers['Content-Type'];
     }
 
-    // Keep token in headers for backward compatibility during transition if needed
+    // Keep token in headers for backward compatibility during transition
     const authToken = token || localStorage.getItem('token');
     if (authToken) {
         config.headers.Authorization = `Bearer ${authToken}`;
@@ -34,13 +34,26 @@ async function apiCall(endpoint, options = {}, token = null) {
     try {
         const response = await fetch(url, config);
 
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.error || 'API request failed');
+        // Parse response body safely
+        let data;
+        try {
+            data = await response.json();
+        } catch {
+            data = { error: 'Server returned invalid response' };
         }
 
-        return await response.json();
+        if (!response.ok) {
+            const error = new Error(data.error || `Request failed with status ${response.status}`);
+            error.data = data;
+            throw error;
+        }
+
+        return data;
     } catch (error) {
+        // Network error handling (translated for user)
+        if (error.name === 'TypeError' && error.message.includes('fetch')) {
+            throw new Error('لا يمكن الاتصال بالخادم. تأكد من تشغيل السيرفر.');
+        }
         console.error('API Error:', error);
         throw error;
     }

@@ -15,6 +15,13 @@ export default function ProtectedRoute({ children, requiredRole = 'student' }) {
         'SUPER_ADMIN': 5
     };
 
+    // Diagnostic Log
+    useEffect(() => {
+        if (!loading) {
+            console.log(`[ProtectedRoute] Auth check: isAuth=${isAuthenticated}, user=${user?.email}, role=${user?.role}, path=${location.pathname}`);
+        }
+    }, [isAuthenticated, user, loading, location.pathname]);
+
     if (loading) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-[#050214]">
@@ -24,13 +31,17 @@ export default function ProtectedRoute({ children, requiredRole = 'student' }) {
     }
 
     if (!isAuthenticated) {
-        // Redirect to login but save the attempted location
+        console.warn(`[ProtectedRoute] Redirection to login from ${location.pathname}: No session found.`);
         return <Navigate to="/login" state={{ from: location }} replace />;
     }
 
     // If user needs onboarding and is NOT already on the onboarding page
     if (needsOnboarding && location.pathname !== '/onboarding') {
-        return <Navigate to="/onboarding" replace />;
+        // SUPER_ADMIN Email bypass for onboarding (allow them to skip if they want)
+        const isSuperAdminEmail = user?.email?.toLowerCase() === 'az.jo.fm@gmail.com';
+        if (!isSuperAdminEmail) {
+            return <Navigate to="/onboarding" replace />;
+        }
     }
 
     // Check role permissions if a specific role is required
@@ -42,11 +53,11 @@ export default function ProtectedRoute({ children, requiredRole = 'student' }) {
         const userRoleLevel = ROLE_HIERARCHY[userRole] || 0;
         const requiredRoleLevel = ROLE_HIERARCHY[requiredRoleUpper] || 0;
 
-        // Ultimate authority bypass for SUPER_ADMIN email
+        // Ultimate authority bypass for SUPER_ADMIN email (case-insensitive)
         const isSuperAdminEmail = userEmail === 'az.jo.fm@gmail.com';
 
         if (userRoleLevel < requiredRoleLevel && !isSuperAdminEmail) {
-            // User is authenticated but doesn't have permission
+            console.error(`[ProtectedRoute] Access Denied: User level (${userRoleLevel}) < Required level (${requiredRoleLevel}). Redirecting to home.`);
             return <Navigate to="/" replace />;
         }
     }

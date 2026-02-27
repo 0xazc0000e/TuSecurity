@@ -1,62 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-
-// API Configuration - point to real backend
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://tusecurity.onrender.com';
-
-// Helper function for API calls with error handling
-export async function apiCall(endpoint, options = {}) {
-    // Ensure endpoint starts with /api for consistency
-    const normalizedEndpoint = endpoint.startsWith('/api') ? endpoint : `/api${endpoint}`;
-    const url = `${API_BASE_URL}${normalizedEndpoint}`;
-
-    const config = {
-        headers: {
-            'Content-Type': 'application/json',
-            ...options.headers
-        },
-        ...options
-    };
-
-    // If body is FormData, remove Content-Type to let browser set boundary
-    if (options.body instanceof FormData) {
-        delete config.headers['Content-Type'];
-    }
-
-    // Keep token support for backward compatibility during transition
-    const token = localStorage.getItem('token');
-    if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-    }
-
-    // Ensure credentials are sent to allow cookies
-    config.credentials = 'include';
-
-    try {
-        const response = await fetch(url, config);
-
-        // Parse response body
-        let data;
-        try {
-            data = await response.json();
-        } catch {
-            data = { error: 'Server returned invalid response' };
-        }
-
-        if (!response.ok) {
-            const error = new Error(data.error || `Request failed with status ${response.status}`);
-            error.data = data; // Attach response data to error object
-            throw error;
-        }
-
-        return data;
-    } catch (error) {
-        // Network error (server not running)
-        if (error.name === 'TypeError' && error.message.includes('fetch')) {
-            throw new Error('لا يمكن الاتصال بالخادم. تأكد من تشغيل السيرفر.');
-        }
-        throw error;
-    }
-}
+import { apiCall } from '../services/api';
 
 // Create Auth Context
 const AuthContext = createContext();
@@ -77,24 +19,53 @@ export const AuthProvider = ({ children }) => {
     // User needs onboarding if authenticated but missing bio (profile not completed)
     const needsOnboarding = isAuthenticated && user && !user.bio;
 
-    // Check for session on mount by trying to fetch profile
-    // HttpOnly cookies mean we can't check localStorage for auth status
+    // Initialization effect
     useEffect(() => {
-        fetchProfile();
+        const initAuth = async () => {
+            // 1. Try to restore from localStorage for immediate (though potentially stale) UI
+            try {
+                const savedUser = localStorage.getItem('user');
+                const savedAuth = localStorage.getItem('isAuthenticated');
+                if (savedUser && savedAuth === 'true') {
+                    const parsedUser = JSON.parse(savedUser);
+                    setUser(parsedUser);
+                    setIsAuthenticated(true);
+                }
+            } catch (err) {
+                console.warn('Failed to parse saved user:', err);
+            }
+
+            // 2. Refresh from server for absolute truth
+            await fetchProfile();
+        };
+
+        initAuth();
     }, []);
 
     // Fetch user profile from real API
     const fetchProfile = useCallback(async () => {
         try {
             const data = await apiCall('/auth/profile');
-            setUser(data);
+            const normalizedUser = {
+                ...data,
+                role: data.role?.toUpperCase() || 'STUDENT'
+            };
+            setUser(normalizedUser);
             setIsAuthenticated(true);
+
+            // Sync to localStorage
+            localStorage.setItem('user', JSON.stringify(normalizedUser));
+            localStorage.setItem('isAuthenticated', 'true');
         } catch (error) {
             console.error('Failed to fetch profile:', error);
-            // Token is invalid or expired - clean up
-            localStorage.removeItem('token');
-            setUser(null);
-            setIsAuthenticated(false);
+            // ONLY logout if it's an auth error, not a network error
+            if (error.data?.status === 401 || error.message.includes('401')) {
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                localStorage.removeItem('isAuthenticated');
+                setUser(null);
+                setIsAuthenticated(false);
+            }
         } finally {
             setLoading(false);
         }
@@ -108,14 +79,21 @@ export const AuthProvider = ({ children }) => {
                 body: JSON.stringify({ email, password })
             });
 
-            // Store JWT token locally ONLY for testing/backward compatibility until all routes are fully migrated
-            // The actual secure token is now in the HttpOnly cookie
+            const normalizedUser = {
+                ...data.user,
+                role: data.user.role?.toUpperCase() || 'STUDENT'
+            };
+
+            // Store token and user data immediately
             if (data.token) {
                 localStorage.setItem('token', data.token);
             }
-            setUser(data.user);
+            localStorage.setItem('user', JSON.stringify(normalizedUser));
+            localStorage.setItem('isAuthenticated', 'true');
+
+            setUser(normalizedUser);
             setIsAuthenticated(true);
-            return { success: true, user: data.user };
+            return { success: true, user: normalizedUser };
         } catch (error) {
             // Check for verification requirement in error data
             if (error.data && error.data.requiresVerification) {
@@ -161,8 +139,14 @@ export const AuthProvider = ({ children }) => {
 
             // Fallback for immediate login (if configured that way)
             if (data.token) {
+                const normalizedUser = {
+                    ...data.user,
+                    role: data.user.role?.toUpperCase() || 'STUDENT'
+                };
                 localStorage.setItem('token', data.token);
-                setUser(data.user);
+                localStorage.setItem('user', JSON.stringify(normalizedUser));
+                localStorage.setItem('isAuthenticated', 'true');
+                setUser(normalizedUser);
                 setIsAuthenticated(true);
             }
 
@@ -180,6 +164,8 @@ export const AuthProvider = ({ children }) => {
             console.error('Logout error:', error);
         } finally {
             localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            localStorage.removeItem('isAuthenticated');
             setUser(null);
             setIsAuthenticated(false);
         }
@@ -195,7 +181,12 @@ export const AuthProvider = ({ children }) => {
             });
             // Use the returned user object directly if available
             if (data.user) {
-                setUser(data.user);
+                const normalizedUser = {
+                    ...data.user,
+                    role: data.user.role?.toUpperCase() || 'STUDENT'
+                };
+                setUser(normalizedUser);
+                localStorage.setItem('user', JSON.stringify(normalizedUser));
             } else {
                 await fetchProfile();
             }
