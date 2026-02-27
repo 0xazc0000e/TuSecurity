@@ -5,6 +5,8 @@ import { NavLink } from '../components/ui/NavLink';
 import { useAuth } from '../context/AuthContext';
 import { XIcon, LinkedInIcon, TelegramIcon, TikTokIcon, WhatsAppIcon } from '../components/ui/SocialIcons';
 import { getApiImageUrl } from '../utils/imageUtils';
+import ReportModal from '../components/reports/ReportModal';
+import { AlertCircle } from 'lucide-react';
 
 const SECTIONS = [
     { id: 'home', label: 'الرئيسية', path: '/' },
@@ -19,6 +21,7 @@ export default function Layout() {
     const navigate = useNavigate();
     const location = useLocation();
     const { user, logout } = useAuth();
+    const [isReportModalOpen, setIsReportModalOpen] = useState(false);
 
     // Filter sections based on auth
     const navItems = SECTIONS;
@@ -130,6 +133,25 @@ export default function Layout() {
             <main className="flex-1 relative pt-32">
                 <Outlet />
             </main>
+
+            {/* Global Report Button (Visible to logged in users) */}
+            {user && (
+                <button
+                    onClick={() => setIsReportModalOpen(true)}
+                    className="fixed bottom-6 left-6 z-50 p-4 bg-red-500 hover:bg-red-600 text-white rounded-full shadow-lg shadow-red-500/40 transition-all hover:scale-110 active:scale-95 group"
+                    title="إرسال بلاغ أو شكوى"
+                >
+                    <AlertCircle size={24} />
+                    <span className="max-w-0 overflow-hidden group-hover:max-w-xs group-hover:mr-2 transition-all duration-300 whitespace-nowrap text-sm font-bold">
+                        بلاغ جديد
+                    </span>
+                </button>
+            )}
+
+            <ReportModal
+                isOpen={isReportModalOpen}
+                onClose={() => setIsReportModalOpen(false)}
+            />
 
             <footer className="py-12 border-t border-white/5 bg-[#02010a] relative z-10">
                 <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-6">

@@ -301,14 +301,17 @@ export const eventsAPI = {
     getRegistrationsSummary: () => apiCall('/events/admin/registrations-summary')
 };
 
-// Distinguished Members API
-export const distinguishedAPI = {
-    getMembers: (month) => apiCall(month ? `/distinguished?month=${month}` : '/distinguished'),
-    getMonths: () => apiCall('/distinguished/months'),
-    addMember: (data) => apiCall('/distinguished', { method: 'POST', body: JSON.stringify(data) }),
-    deleteMember: (id) => apiCall(`/distinguished/${id}`, { method: 'DELETE' }),
-    getMessages: (memberId) => apiCall(`/distinguished/${memberId}/messages`),
-    sendMessage: (memberId, message) => apiCall(`/distinguished/${memberId}/messages`, { method: 'POST', body: JSON.stringify({ message }) })
+// Reports API
+export const reportsAPI = {
+    submitReport: (data) => apiCall('/reports', {
+        method: 'POST',
+        body: JSON.stringify(data)
+    }),
+    getReports: () => apiCall('/reports'),
+    updateReportStatus: (id, status) => apiCall(`/reports/${id}/status`, {
+        method: 'PUT',
+        body: JSON.stringify({ status })
+    })
 };
 
 // Default export
@@ -321,5 +324,6 @@ export default {
     news: newsAPI,
     events: eventsAPI,
     distinguished: distinguishedAPI,
+    reports: reportsAPI,
     apiCall
 };

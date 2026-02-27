@@ -8,11 +8,13 @@ if (!JWT_SECRET) {
     process.exit(1);
 }
 
-// Role hierarchy (higher number = more permissions)
+// Role hierarchy (higher level = more permissions)
 const ROLE_HIERARCHY = {
-    'student': 1,
-    'editor': 2,
-    'admin': 3
+    'STUDENT': 1,
+    'EDITOR': 2,
+    'MANAGER': 3,
+    'ADMIN': 4,
+    'SUPER_ADMIN': 5
 };
 
 /**
@@ -32,15 +34,17 @@ const checkPermission = (requiredRole) => {
 
             const user = await prisma.users.findUnique({
                 where: { id: decoded.id },
-                select: { role: true }
+                select: { role: true, email: true }
             });
 
             if (!user) {
                 return res.status(401).json({ error: 'User not found' });
             }
 
-            const userLevel = ROLE_HIERARCHY[user.role] || 0;
-            const requiredLevel = ROLE_HIERARCHY[requiredRole] || 0;
+            // Normalization: Ensure role matches hierarchy keys (uppercase)
+            const userRole = user.role ? user.role.toUpperCase() : 'STUDENT';
+            const userLevel = ROLE_HIERARCHY[userRole] || 0;
+            const requiredLevel = ROLE_HIERARCHY[requiredRole.toUpperCase()] || 0;
 
             if (userLevel < requiredLevel) {
                 return res.status(403).json({
@@ -51,8 +55,8 @@ const checkPermission = (requiredRole) => {
             }
 
             req.userId = decoded.id;
-            req.userRole = user.role;
-            req.user = { id: decoded.id, ...user }; // Ensure req.user.id works and includes full user data
+            req.userRole = userRole;
+            req.user = { id: decoded.id, ...user, role: userRole };
             next();
         } catch (error) {
             if (error.name === 'JsonWebTokenError') {
@@ -67,12 +71,17 @@ const checkPermission = (requiredRole) => {
 /**
  * Require admin access (full access)
  */
-const requireAdmin = checkPermission('admin');
+const requireAdmin = checkPermission('ADMIN');
+
+/**
+ * Require manager or higher
+ */
+const requireManager = checkPermission('MANAGER');
 
 /**
  * Require editor or admin access (content management)
  */
-const requireEditor = checkPermission('editor');
+const requireEditor = checkPermission('EDITOR');
 
 /**
  * Simple authentication (any logged-in user)
@@ -87,8 +96,8 @@ const requireAuth = (req, res, next) => {
     try {
         const decoded = jwt.verify(token, JWT_SECRET);
         req.userId = decoded.id;
-        req.userRole = decoded.role;
-        req.user = { id: decoded.id, role: decoded.role }; // Standardized format
+        req.userRole = decoded.role ? decoded.role.toUpperCase() : 'STUDENT';
+        req.user = { id: decoded.id, role: req.userRole }; // Standardized format
         next();
     } catch (error) {
         return res.status(401).json({ error: 'Invalid token' });
@@ -98,6 +107,7 @@ const requireAuth = (req, res, next) => {
 module.exports = {
     checkPermission,
     requireAdmin,
+    requireManager,
     requireEditor,
     requireAuth,
     ROLE_HIERARCHY

@@ -18,6 +18,8 @@ import ScenarioManagement from '../components/admin/ScenarioManagement';
 import NewsManagement from '../components/admin/NewsManagement';
 import LmsManagement from '../components/admin/LmsManagement';
 import EventsManagement from '../components/admin/EventsManagement';
+import ReportsManagement from '../components/admin/ReportsManagement';
+import SecurityAuditLogs from '../components/admin/SecurityAuditLogs';
 
 export default function AdminAdvanced() {
     const navigate = useNavigate();
@@ -27,12 +29,12 @@ export default function AdminAdvanced() {
 
     // Security Check
     useEffect(() => {
-        if (user && user.role !== 'admin' && user.role !== 'editor') navigate('/dashboard');
+        if (user && user.role !== 'admin' && user.role !== 'editor' && user.role !== 'manager') navigate('/dashboard');
     }, [user, navigate]);
 
     // Fetch stats on mount
     useEffect(() => {
-        if (user && (user.role === 'admin' || user.role === 'editor')) fetchDashboardData();
+        if (user && (user.role === 'admin' || user.role === 'editor' || user.role === 'manager')) fetchDashboardData();
     }, [user]);
 
     const fetchDashboardData = async () => {
@@ -41,22 +43,22 @@ export default function AdminAdvanced() {
 
     // Menu Configuration
     const menuItems = [
-        { id: 'dashboard', label: 'لوحة التحكم', icon: LayoutDashboard, requiredRole: 'editor' },
-        { id: 'users', label: 'المستخدمين', icon: Users, requiredRole: 'admin' },
-        { id: 'events', label: 'الفعاليات', icon: Calendar, requiredRole: 'editor' },
-        { id: 'news', label: 'الأخبار', icon: Newspaper, requiredRole: 'editor' },
-        { id: 'lms', label: 'قاعدة المعرفة (LMS)', icon: BookOpen, requiredRole: 'editor' },
-        { id: 'simulators', label: 'السيناريوهات', icon: Terminal, requiredRole: 'editor' },
-        { id: 'content', label: 'أرشيف المحتوى', icon: FileText, requiredRole: 'editor' },
-        { id: 'security', label: 'سجل النظام', icon: ShieldAlert, requiredRole: 'admin' },
-        { id: 'settings', label: 'الإعدادات', icon: Settings, requiredRole: 'admin' }
+        { id: 'dashboard', label: 'لوحة التحكم', icon: LayoutDashboard, requiredRole: 'EDITOR' },
+        { id: 'users', label: 'المستخدمين', icon: Users, requiredRole: 'MANAGER' },
+        { id: 'lms', label: 'المحتوى التعليمي', icon: BookOpen, requiredRole: 'EDITOR' },
+        { id: 'events', label: 'الفعاليات', icon: Calendar, requiredRole: 'EDITOR' },
+        { id: 'reports', label: 'البلاغات', icon: MessageSquare, requiredRole: 'MANAGER' },
+        { id: 'security', label: 'سجلات الأمان', icon: Shield, requiredRole: 'ADMIN' },
+        { id: 'settings', label: 'الإعدادات', icon: Settings, requiredRole: 'ADMIN' },
     ];
 
-    const accessibleMenuItems = menuItems.filter(item => {
-        if (!user) return false;
-        const roleHierarchy = { student: 1, editor: 2, admin: 3 };
-        return roleHierarchy[user.role] >= roleHierarchy[item.requiredRole];
-    });
+    const hasPermission = (requiredRole) => {
+        const ROLE_LEVELS = { 'STUDENT': 1, 'EDITOR': 2, 'MANAGER': 3, 'ADMIN': 4, 'SUPER_ADMIN': 5 };
+        const userRole = user?.role?.toUpperCase() || 'STUDENT';
+        return (ROLE_LEVELS[userRole] || 0) >= (ROLE_LEVELS[requiredRole.toUpperCase()] || 0);
+    };
+
+    const accessibleMenuItems = menuItems.filter(item => hasPermission(item.requiredRole));
 
     const renderDashboard = () => (
         <div className="space-y-6">
@@ -102,27 +104,22 @@ export default function AdminAdvanced() {
             case 'dashboard': return renderDashboard();
             case 'users': return <UserManagementAdvanced />;
             case 'events': return <EventsManagement />;
-            case 'news': return <NewsManagement />;
             case 'lms': return <LmsManagement />;
-            case 'simulators': return <ScenarioManagement />;
-            case 'content': return <ContentManagement />;
-            case 'security': return (
-                <div className="flex items-center justify-center h-64 bg-white/5 rounded-xl border border-white/10">
-                    <div className="text-center text-gray-400">
-                        <ShieldAlert size={48} className="mx-auto mb-4 opacity-50" />
-                        <p>سجلات الأمان قيد التطوير</p>
+            case 'reports':
+                return <ReportsManagement />;
+            case 'security':
+                return <SecurityAuditLogs />;
+            case 'settings':
+                return (
+                    <div className="flex items-center justify-center h-64 bg-white/5 rounded-xl border border-white/10">
+                        <div className="text-center text-gray-400">
+                            <Settings size={48} className="mx-auto mb-4 opacity-50" />
+                            <p>الإعدادات قيد التطوير</p>
+                        </div>
                     </div>
-                </div>
-            );
-            case 'settings': return (
-                <div className="flex items-center justify-center h-64 bg-white/5 rounded-xl border border-white/10">
-                    <div className="text-center text-gray-400">
-                        <Settings size={48} className="mx-auto mb-4 opacity-50" />
-                        <p>الإعدادات قيد التطوير</p>
-                    </div>
-                </div>
-            );
-            default: return renderDashboard();
+                );
+            default:
+                return renderDashboard();
         }
     };
 

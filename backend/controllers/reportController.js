@@ -1,151 +1,111 @@
-const { 
-    getDashboardStats, 
-    getUserActivityReport, 
-    getTopUsers, 
-    getContentPerformanceReport, 
-    getEngagementMetrics,
-    getSystemHealthReport 
-} = require('../services/reportService');
+const { prisma } = require('../models/prismaDatabase');
 
-// Get main dashboard statistics
-exports.getDashboardStats = async (req, res) => {
+/**
+ * Submit a new report (Any authenticated user)
+ */
+const submitReport = async (req, res) => {
     try {
-        const stats = await getDashboardStats();
-        res.json({
-            success: true,
-            stats
-        });
-    } catch (error) {
-        console.error('Error in getDashboardStats:', error);
-        res.status(500).json({ success: false, error: 'Failed to fetch dashboard stats' });
-    }
-};
+        const { subject, description } = req.body;
+        const userId = req.user.id;
 
-// Get user activity report
-exports.getUserActivityReport = async (req, res) => {
-    try {
-        const days = parseInt(req.query.days) || 30;
-        const report = await getUserActivityReport(days);
-        res.json({
-            success: true,
-            report
-        });
-    } catch (error) {
-        console.error('Error in getUserActivityReport:', error);
-        res.status(500).json({ success: false, error: 'Failed to fetch activity report' });
-    }
-};
+        if (!subject || !description) {
+            return res.status(400).json({ error: 'Subject and description are required' });
+        }
 
-// Get top users leaderboard
-exports.getTopUsers = async (req, res) => {
-    try {
-        const limit = parseInt(req.query.limit) || 10;
-        const users = await getTopUsers(limit);
-        res.json({
-            success: true,
-            users
-        });
-    } catch (error) {
-        console.error('Error in getTopUsers:', error);
-        res.status(500).json({ success: false, error: 'Failed to fetch top users' });
-    }
-};
-
-// Get content performance report
-exports.getContentPerformanceReport = async (req, res) => {
-    try {
-        const report = await getContentPerformanceReport();
-        res.json({
-            success: true,
-            report
-        });
-    } catch (error) {
-        console.error('Error in getContentPerformanceReport:', error);
-        res.status(500).json({ success: false, error: 'Failed to fetch content performance' });
-    }
-};
-
-// Get engagement metrics
-exports.getEngagementMetrics = async (req, res) => {
-    try {
-        const metrics = await getEngagementMetrics();
-        res.json({
-            success: true,
-            metrics
-        });
-    } catch (error) {
-        console.error('Error in getEngagementMetrics:', error);
-        res.status(500).json({ success: false, error: 'Failed to fetch engagement metrics' });
-    }
-};
-
-// Get system health report
-exports.getSystemHealthReport = async (req, res) => {
-    try {
-        const report = await getSystemHealthReport();
-        res.json({
-            success: true,
-            report
-        });
-    } catch (error) {
-        console.error('Error in getSystemHealthReport:', error);
-        res.status(500).json({ success: false, error: 'Failed to fetch system health' });
-    }
-};
-
-// Get comprehensive report (all in one)
-exports.getFullReport = async (req, res) => {
-    try {
-        const days = parseInt(req.query.days) || 30;
-        
-        const [
-            dashboardStats,
-            activityReport,
-            topUsers,
-            contentPerformance,
-            engagementMetrics,
-            systemHealth
-        ] = await Promise.all([
-            getDashboardStats(),
-            getUserActivityReport(days),
-            getTopUsers(10),
-            getContentPerformanceReport(),
-            getEngagementMetrics(),
-            getSystemHealthReport()
-        ]);
-
-        res.json({
-            success: true,
-            report: {
-                dashboard: dashboardStats,
-                activity: activityReport,
-                topUsers,
-                content: contentPerformance,
-                engagement: engagementMetrics,
-                systemHealth,
-                generatedAt: new Date().toISOString()
+        const report = await prisma.reports.create({
+            data: {
+                user_id: userId,
+                subject,
+                description,
+                status: 'PENDING'
             }
         });
-    } catch (error) {
-        console.error('Error in getFullReport:', error);
-        res.status(500).json({ success: false, error: 'Failed to generate full report' });
+
+        // Log the action
+        await prisma.logs.create({
+            data: {
+                user_id: userId,
+                action: 'REPORT_SUBMITTED',
+                resource_type: 'report',
+                resource_id: parseInt(report.id.split('-')[0]) || 0, // UUID to int hack for log schema if needed, or just 0
+                details: `Report submitted: ${subject}`,
+                ip_address: req.ip || 'unknown'
+            }
+        });
+
+        res.status(201).json({
+            message: 'Report submitted successfully',
+            report
+        });
+    } catch (err) {
+        console.error('Submit report error:', err);
+        res.status(500).json({ error: 'Failed to submit report' });
     }
 };
 
-// Export report as CSV (placeholder for future implementation)
-exports.exportReport = async (req, res) => {
+/**
+ * Get all reports (Managers, Admins, Super Admins)
+ */
+const getAllReports = async (req, res) => {
     try {
-        const { type } = req.params;
-        
-        // For now, return JSON with export notice
-        // In production, this would generate a CSV/PDF file
-        res.json({
-            success: true,
-            message: `Export for ${type} will be implemented with CSV/PDF generation`,
-            note: 'Use the regular endpoints to get data and export client-side'
+        const reports = await prisma.reports.findMany({
+            include: {
+                users: {
+                    select: {
+                        username: true,
+                        email: true,
+                        full_name: true
+                    }
+                }
+            },
+            orderBy: { created_at: 'desc' }
         });
-    } catch (error) {
-        console.error('Error in exportReport:', error);
-        res.status(500).json({ success: false, error: 'Failed to export report' });
+
+        res.json(reports);
+    } catch (err) {
+        console.error('Get reports error:', err);
+        res.status(500).json({ error: 'Failed to fetch reports' });
     }
+};
+
+/**
+ * Update report status (Mark as RESOLVED)
+ */
+const updateReportStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status } = req.body;
+
+        if (!status || !['PENDING', 'RESOLVED'].includes(status)) {
+            return res.status(400).json({ error: 'Invalid status. Must be PENDING or RESOLVED' });
+        }
+
+        await prisma.reports.update({
+            where: { id },
+            data: { status }
+        });
+
+        // Log the action
+        await prisma.logs.create({
+            data: {
+                user_id: req.user.id,
+                action: 'REPORT_STATUS_UPDATED',
+                resource_type: 'report',
+                details: `Report ${id} status set to ${status}`,
+                ip_address: req.ip || 'unknown'
+            }
+        });
+
+        res.json({ message: 'Report status updated successfully' });
+    } catch (err) {
+        console.error('Update report error:', err);
+        if (err.code === 'P2025') return res.status(404).json({ error: 'Report not found' });
+        res.status(500).json({ error: 'Failed to update report status' });
+    }
+};
+
+module.exports = {
+    submitReport,
+    getAllReports,
+    updateReportStatus
 };

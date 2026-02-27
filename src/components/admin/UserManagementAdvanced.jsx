@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { useAuth } from '../../context/AuthContext';
 import {
     Users, Search, Filter, Shield, Activity,
     Lock, Award, AlertTriangle, CheckCircle,
@@ -19,6 +20,8 @@ export default function UserManagementAdvanced() {
     const [actionLoading, setActionLoading] = useState(false);
     const [filterStatus, setFilterStatus] = useState('all');
     const [updatingRole, setUpdatingRole] = useState(null);
+    const { user: currentUser } = useAuth();
+    const [stats, setStats] = useState({ admin_count: 0 });
 
     useEffect(() => {
         fetchUsers();
@@ -27,8 +30,12 @@ export default function UserManagementAdvanced() {
     const fetchUsers = async () => {
         try {
             setLoading(true);
-            const data = await adminAPI.getUsers();
-            setUsers(data);
+            const [usersData, statsData] = await Promise.all([
+                adminAPI.getUsers(),
+                adminAPI.getStats()
+            ]);
+            setUsers(usersData);
+            setStats(statsData);
             setError(null);
         } catch (err) {
             console.error('Failed to fetch users:', err);
@@ -147,15 +154,57 @@ export default function UserManagementAdvanced() {
     };
 
     const getRoleBadge = (role) => {
-        const styles = { admin: 'text-purple-400', editor: 'text-blue-400', student: 'text-gray-400' };
-        const labels = { admin: 'مدير', editor: 'محرر', student: 'طالب' };
-        const icons = { admin: <Shield size={14} />, editor: <Lock size={14} />, student: <Users size={14} /> };
+        const roleUpper = role?.toUpperCase();
+        const styles = {
+            SUPER_ADMIN: 'text-red-400',
+            ADMIN: 'text-purple-400',
+            MANAGER: 'text-orange-400',
+            EDITOR: 'text-blue-400',
+            STUDENT: 'text-gray-400'
+        };
+        const labels = {
+            SUPER_ADMIN: 'Super Admin',
+            ADMIN: 'Admin',
+            MANAGER: 'Manager',
+            EDITOR: 'Editor',
+            STUDENT: 'Student'
+        };
+        const icons = {
+            SUPER_ADMIN: <Shield size={14} />,
+            ADMIN: <Shield size={14} />,
+            MANAGER: <Lock size={14} />,
+            EDITOR: <Lock size={14} />,
+            STUDENT: <Users size={14} />
+        };
         return (
-            <span className={`flex items-center gap-1 text-sm ${styles[role]}`}>
-                {icons[role]}
-                {labels[role]}
+            <span className={`flex items-center gap-1 text-[10px] font-bold uppercase ${styles[roleUpper] || 'text-gray-400'}`}>
+                {icons[roleUpper] || <Users size={14} />}
+                {labels[roleUpper] || role}
             </span>
         );
+    };
+
+    const canManageUser = (targetUser) => {
+        if (!currentUser) return false;
+        if (targetUser.email === 'az.jo.fm@gmail.com') return false; // SUPER_ADMIN is protected
+
+        const ROLE_LEVELS = { 'STUDENT': 1, 'EDITOR': 2, 'MANAGER': 3, 'ADMIN': 4, 'SUPER_ADMIN': 5 };
+        const myLevel = ROLE_LEVELS[currentUser.role?.toUpperCase()] || 0;
+        const targetLevel = ROLE_LEVELS[targetUser.role?.toUpperCase()] || 0;
+
+        if (currentUser.email === 'az.jo.fm@gmail.com') return true; // Me is super admin
+
+        // Managers only EDITOR/STUDENT
+        if (currentUser.role?.toUpperCase() === 'MANAGER') {
+            return targetLevel < 3;
+        }
+
+        // Admin manage MANAGER/EDITOR/STUDENT
+        if (currentUser.role?.toUpperCase() === 'ADMIN') {
+            return targetLevel < 4;
+        }
+
+        return myLevel > targetLevel;
     };
 
     if (loading) {
@@ -236,16 +285,18 @@ export default function UserManagementAdvanced() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.2 }}
-                    className="bg-gradient-to-br from-yellow-500/10 to-orange-500/10 border border-yellow-500/30 rounded-xl p-6"
+                    className={`bg-gradient-to-br from-yellow-500/10 to-orange-500/10 border rounded-xl p-6 ${stats.admin_count >= 5 ? 'border-red-500/50' : 'border-yellow-500/30'}`}
                 >
                     <div className="flex items-center justify-between mb-4">
-                        <Award className="text-yellow-400" size={24} />
-                        <span className="text-green-400 text-sm">+24%</span>
+                        <Shield className="text-yellow-400" size={24} />
+                        <span className={`text-sm ${stats.admin_count >= 5 ? 'text-red-400' : 'text-green-400'}`}>
+                            {stats.admin_count}/5
+                        </span>
                     </div>
                     <div className="text-3xl font-bold text-white mb-2">
-                        {users.filter(u => u.role === 'admin').length}
+                        {stats.admin_count}
                     </div>
-                    <div className="text-gray-400 text-sm">المدراء</div>
+                    <div className="text-gray-400 text-sm">المدراء (Admins)</div>
                 </motion.div>
 
                 <motion.div
@@ -285,9 +336,10 @@ export default function UserManagementAdvanced() {
                         className="px-4 py-3 bg-white/10 border border-white/20 rounded-lg text-white focus:outline-none focus:border-[#7112AF] transition-colors"
                     >
                         <option value="all">جميع الأدوار</option>
-                        <option value="admin">مدير</option>
-                        <option value="instructor">مدرب</option>
-                        <option value="student">طالب</option>
+                        <option value="ADMIN">ADMIN</option>
+                        <option value="MANAGER">MANAGER</option>
+                        <option value="EDITOR">EDITOR</option>
+                        <option value="STUDENT">STUDENT</option>
                     </select>
 
                     <select
@@ -298,7 +350,6 @@ export default function UserManagementAdvanced() {
                         <option value="all">جميع الحالات</option>
                         <option value="active">نشط</option>
                         <option value="suspended">موقوف</option>
-                        <option value="inactive">غير نشط</option>
                     </select>
 
                     <button className="px-4 py-3 bg-[#7112AF]/20 text-[#7112AF] rounded-lg hover:bg-[#7112AF]/30 transition-colors flex items-center justify-center gap-2">
@@ -345,16 +396,19 @@ export default function UserManagementAdvanced() {
                                     <td className="px-6 py-4">
                                         <div className="flex items-center gap-2">
                                             {getRoleBadge(user.role)}
-                                            <select
-                                                value={user.role}
-                                                onChange={(e) => handleRoleChange(user.id, e.target.value)}
-                                                disabled={updatingRole === user.id}
-                                                className="bg-white/10 border border-white/20 rounded px-2 py-1 text-xs text-white focus:outline-none focus:border-purple-500"
-                                            >
-                                                <option value="student">طالب</option>
-                                                <option value="editor">محرر</option>
-                                                <option value="admin">مدير</option>
-                                            </select>
+                                            {canManageUser(user) && (
+                                                <select
+                                                    value={user.role?.toUpperCase()}
+                                                    onChange={(e) => handleRoleChange(user.id, e.target.value)}
+                                                    disabled={updatingRole === user.id}
+                                                    className="bg-white/10 border border-white/20 rounded px-2 py-1 text-[10px] text-white focus:outline-none focus:border-purple-500"
+                                                >
+                                                    <option value="STUDENT">STUDENT</option>
+                                                    <option value="EDITOR">EDITOR</option>
+                                                    <option value="MANAGER">MANAGER</option>
+                                                    {currentUser?.email === 'az.jo.fm@gmail.com' && <option value="ADMIN">ADMIN</option>}
+                                                </select>
+                                            )}
                                         </div>
                                     </td>
                                     <td className="px-6 py-4">{getStatusBadge(user.status)}</td>
@@ -371,11 +425,11 @@ export default function UserManagementAdvanced() {
                                         <div className="flex items-center gap-2">
                                             <button
                                                 onClick={() => handleBanUser(user.id, user.status)}
-                                                disabled={actionLoading}
+                                                disabled={actionLoading || !canManageUser(user)}
                                                 className={`p-2 rounded-lg transition-colors ${user.status === 'suspended'
-                                                        ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
-                                                        : 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
-                                                    }`}
+                                                    ? 'bg-green-500/20 text-green-400 hover:bg-green-500/30'
+                                                    : 'bg-red-500/20 text-red-400 hover:bg-red-500/30'
+                                                    } disabled:opacity-20 disabled:cursor-not-allowed`}
                                                 title={user.status === 'suspended' ? 'إلغاء الحظر' : 'حظر'}
                                             >
                                                 {user.status === 'suspended' ? <Unlock size={16} /> : <Ban size={16} />}
@@ -385,16 +439,16 @@ export default function UserManagementAdvanced() {
                                                     setSelectedUser(user);
                                                     setShowResetModal(true);
                                                 }}
-                                                disabled={actionLoading}
-                                                className="p-2 bg-yellow-500/20 text-yellow-400 rounded-lg hover:bg-yellow-500/30 transition-colors"
+                                                disabled={actionLoading || !canManageUser(user)}
+                                                className="p-2 bg-yellow-500/20 text-yellow-400 rounded-lg hover:bg-yellow-500/30 transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
                                                 title="إعادة تعيين كلمة المرور"
                                             >
                                                 <Lock size={16} />
                                             </button>
                                             <button
                                                 onClick={() => handleDeleteUser(user.id)}
-                                                disabled={actionLoading}
-                                                className="p-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors"
+                                                disabled={actionLoading || !canManageUser(user)}
+                                                className="p-2 bg-red-500/20 text-red-400 rounded-lg hover:bg-red-500/30 transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
                                                 title="حذف"
                                             >
                                                 <Trash2 size={16} />

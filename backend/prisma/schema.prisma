@@ -2,6 +2,14 @@ generator client {
   provider = "prisma-client-js"
 }
 
+enum Role {
+  SUPER_ADMIN
+  ADMIN
+  MANAGER
+  EDITOR
+  STUDENT
+}
+
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
@@ -432,7 +440,7 @@ model users {
   username               String                   @unique
   email                  String                   @unique
   password_hash          String?
-  role                   String?                  @default("student")
+  role                   Role                     @default(STUDENT)
   is_verified            Boolean?                 @default(false)
   verification_token     String?
   avatar                 String?                  @default("/default-avatar.png")
@@ -474,6 +482,7 @@ model users {
   user_progress          user_progress[]
   user_streaks           user_streaks?
   xp_transactions        xp_transactions[]
+  reports                reports[]
 }
 
 model xp_transactions {
@@ -498,4 +507,14 @@ model content {
   status         String?   @default("published")
   date_published DateTime? @default(now())
   created_at     DateTime? @default(now())
+}
+
+model reports {
+  id          String   @id @default(uuid())
+  user_id     Int
+  subject     String
+  description String   @db.Text
+  status      String   @default("PENDING")
+  created_at  DateTime @default(now())
+  users       users    @relation(fields: [user_id], references: [id], onDelete: Cascade)
 }

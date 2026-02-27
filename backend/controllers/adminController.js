@@ -8,12 +8,14 @@ const getStats = async (req, res) => {
             activeUsers,
             totalSimulators,
             totalContent,
+            adminCount,
             todayLogins
         ] = await Promise.all([
             prisma.users.count(),
             prisma.users.count({ where: { status: 'active' } }),
             prisma.simulators.count(),
             prisma.content.count(),
+            prisma.users.count({ where: { role: 'ADMIN' } }),
             prisma.logs.count({
                 where: {
                     action: 'USER_LOGIN',
@@ -29,6 +31,7 @@ const getStats = async (req, res) => {
             active_users: activeUsers,
             total_simulators: totalSimulators,
             total_content: totalContent,
+            admin_count: adminCount,
             today_logins: todayLogins,
             system_health: 98,
             security_score: 95
@@ -109,17 +112,46 @@ const updateUser = async (req, res) => {
 const deleteUser = async (req, res) => {
     try {
         const { id } = req.params;
+        const targetUserId = parseInt(id);
+
+        const performer = await prisma.users.findUnique({
+            where: { id: req.user.id },
+            select: { role: true, email: true }
+        });
+
+        const target = await prisma.users.findUnique({
+            where: { id: targetUserId },
+            select: { role: true, email: true }
+        });
+
+        if (!target) return res.status(404).json({ error: 'User not found' });
+
+        // Rule: SUPER_ADMIN is non-deletable
+        if (target.email === 'az.jo.fm@gmail.com') {
+            return res.status(403).json({ error: 'SUPER_ADMIN cannot be deleted' });
+        }
+
+        // Rule: Hierarchy restrictions
+        const ROLE_LEVELS = { 'STUDENT': 1, 'EDITOR': 2, 'MANAGER': 3, 'ADMIN': 4, 'SUPER_ADMIN': 5 };
+        const performerLevel = ROLE_LEVELS[performer.role] || 1;
+        const targetLevel = ROLE_LEVELS[target.role] || 1;
+
+        if (performerLevel <= targetLevel && performer.email !== 'az.jo.fm@gmail.com') {
+            return res.status(403).json({ error: 'Insufficient permissions to delete this user' });
+        }
+
+        // Additional hierarchy check for Managers
+        if (performer.role === 'MANAGER' && targetLevel >= 3) {
+            return res.status(403).json({ error: 'Managers can only delete EDITOR and STUDENT roles' });
+        }
 
         await prisma.users.delete({
-            where: { id: parseInt(id) }
+            where: { id: targetUserId }
         });
 
         res.json({ message: 'User deleted successfully' });
     } catch (err) {
         console.error('Delete user error:', err);
-        if (err.code === 'P2025') {
-            return res.status(404).json({ error: 'User not found' });
-        }
         res.status(500).json({ error: 'Failed to delete user' });
     }
 };
@@ -245,13 +277,68 @@ const updateUserRole = async (req, res) => {
     try {
         const { id } = req.params;
         const { role } = req.body;
+        const targetUserId = parseInt(id);
 
-        if (!role || !['admin', 'editor', 'student'].includes(role)) {
-            return res.status(400).json({ error: 'Invalid role. Must be admin, editor, or student' });
+        if (!role || !['SUPER_ADMIN', 'ADMIN', 'MANAGER', 'EDITOR', 'STUDENT'].includes(role)) {
+            return res.status(400).json({ error: 'Invalid role. Must be SUPER_ADMIN, ADMIN, MANAGER, EDITOR, or STUDENT' });
+        }
+
+        // Current user (performer)
+        const performer = await prisma.users.findUnique({
+            where: { id: req.user.id },
+            select: { role: true, email: true }
+        });
+
+        // Target user
+        const target = await prisma.users.findUnique({
+            where: { id: targetUserId },
+            select: { role: true, email: true }
+        });
+
+        if (!target) return res.status(404).json({ error: 'User not found' });
+
+        // Rule: SUPER_ADMIN (az.jo.fm@gmail.com) is immutable
+        if (target.email === 'az.jo.fm@gmail.com') {
+            return res.status(403).json({ error: 'SUPER_ADMIN role and data are immutable' });
+        }
+
+        // Rule: Only SUPER_ADMIN can promote/demote ADMINs
+        if (role === 'ADMIN' || target.role === 'ADMIN') {
+            if (performer.email !== 'az.jo.fm@gmail.com') {
+                return res.status(403).json({ error: 'Only SUPER_ADMIN can manage ADMIN roles' });
+            }
+        }
+
+        // Rule: MAX 5 ADMINs
+        if (role === 'ADMIN' && target.role !== 'ADMIN') {
+            const adminCount = await prisma.users.count({ where: { role: 'ADMIN' } });
+            if (adminCount >= 5) {
+                return res.status(400).json({ error: 'Maximum limit of 5 ADMINs reached' });
+            }
+        }
+
+        // Rule: Hierarchy restrictions
+        const ROLE_LEVELS = { 'STUDENT': 1, 'EDITOR': 2, 'MANAGER': 3, 'ADMIN': 4, 'SUPER_ADMIN': 5 };
+        const performerLevel = ROLE_LEVELS[performer.role] || 1;
+        const targetLevel = ROLE_LEVELS[target.role] || 1;
+        const newRoleLevel = ROLE_LEVELS[role] || 1;
+
+        // Managers can only manage EDITOR and STUDENT
+        if (performer.role === 'MANAGER') {
+            if (targetLevel >= 3 || newRoleLevel >= 3) {
+                return res.status(403).json({ error: 'Managers can only assign EDITOR or STUDENT roles to subordinates' });
+            }
+        }
+
+        // Admins can manage MANAGER, EDITOR, STUDENT
+        if (performer.role === 'ADMIN') {
+            if (targetLevel >= 4 || newRoleLevel >= 4) {
+                return res.status(403).json({ error: 'Admins cannot manage other Admins or Super Admins' });
+            }
         }
 
         await prisma.users.update({
-            where: { id: parseInt(id) },
+            where: { id: targetUserId },
             data: { role }
         });
 
@@ -261,7 +348,7 @@ const updateUserRole = async (req, res) => {
                 user_id: req.user.id,
                 action: 'ROLE_CHANGED',
                 resource_type: 'user',
-                resource_id: parseInt(id),
+                resource_id: targetUserId,
                 details: `Role changed to ${role}`,
                 ip_address: req.ip || 'unknown'
             }
@@ -273,9 +360,6 @@ const updateUserRole = async (req, res) => {
         });
     } catch (err) {
         console.error('Role update error:', err);
-        if (err.code === 'P2025') {
-            return res.status(404).json({ error: 'User not found' });
-        }
         res.status(500).json({ error: 'Failed to update role' });
     }
 };
