@@ -1,10 +1,13 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-export default function ProtectedRoute({ children, requiredRole = 'student' }) {
+export default function ProtectedRoute({ children, requiredRole = null }) {
     const { user, isAuthenticated, loading, needsOnboarding } = useAuth();
     const location = useLocation();
+
+    // Diagnostic Log (Requested by user)
+    console.log("Auth State:", { user, loading, role: user?.role });
 
     // Role hierarchy (New strict system)
     const ROLE_HIERARCHY = {
@@ -14,13 +17,6 @@ export default function ProtectedRoute({ children, requiredRole = 'student' }) {
         'ADMIN': 4,
         'SUPER_ADMIN': 5
     };
-
-    // Diagnostic Log
-    useEffect(() => {
-        if (!loading) {
-            console.log(`[ProtectedRoute] Auth check: isAuth=${isAuthenticated}, user=${user?.email}, role=${user?.role}, path=${location.pathname}`);
-        }
-    }, [isAuthenticated, user, loading, location.pathname]);
 
     if (loading) {
         return (
@@ -36,28 +32,27 @@ export default function ProtectedRoute({ children, requiredRole = 'student' }) {
     }
 
     // If user needs onboarding and is NOT already on the onboarding page
-    if (needsOnboarding && location.pathname !== '/onboarding') {
-        // SUPER_ADMIN Email bypass for onboarding (allow them to skip if they want)
-        const isSuperAdminEmail = user?.email?.toLowerCase() === 'az.jo.fm@gmail.com';
-        if (!isSuperAdminEmail) {
+    if (needsOnboarding && location.pathname !== '/onboarding' && location.pathname !== '/complete-profile') {
+        // SUPER_ADMIN Bypass onboarding
+        const isSuperAdmin = user?.role?.toUpperCase() === 'SUPER_ADMIN' || user?.email?.toLowerCase() === 'az.jo.fm@gmail.com';
+        if (!isSuperAdmin) {
             return <Navigate to="/onboarding" replace />;
         }
     }
 
     // Check role permissions if a specific role is required
     if (requiredRole) {
-        const rawRole = user?.role || 'STUDENT';
-        const userRole = rawRole.toUpperCase();
+        const userRole = (user?.role || 'STUDENT').toUpperCase();
         const userEmail = user?.email?.toLowerCase() || '';
         const requiredRoleUpper = requiredRole.toUpperCase();
 
-        const userRoleLevel = ROLE_HIERARCHY[userRole] || 1; // Default to Student level if unknown
+        const userRoleLevel = ROLE_HIERARCHY[userRole] || 1;
         const requiredRoleLevel = ROLE_HIERARCHY[requiredRoleUpper] || 1;
 
-        // Ultimate authority bypass for SUPER_ADMIN email (case-insensitive)
-        const isSuperAdminEmail = userEmail === 'az.jo.fm@gmail.com';
+        // Bypasses for SUPER_ADMIN (both role and email)
+        const isSuperAdmin = userRole === 'SUPER_ADMIN' || userEmail === 'az.jo.fm@gmail.com';
 
-        if (userRoleLevel < requiredRoleLevel && !isSuperAdminEmail) {
+        if (userRoleLevel < requiredRoleLevel && !isSuperAdmin) {
             console.error(`[ProtectedRoute] ACCESS DENIED: User Role [${userRole}] (Level ${userRoleLevel}) < Required [${requiredRoleUpper}] (Level ${requiredRoleLevel}). Redirecting...`);
             return <Navigate to="/" replace />;
         }

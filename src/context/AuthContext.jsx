@@ -22,21 +22,36 @@ export const AuthProvider = ({ children }) => {
     // Initialization effect
     useEffect(() => {
         const initAuth = async () => {
-            // 1. Try to restore from localStorage for immediate (though potentially stale) UI
             try {
+                setLoading(true);
+                // 1. Try to restore from localStorage for immediate state (optional, but keep it for UI responsiveness)
                 const savedUser = localStorage.getItem('user');
                 const savedAuth = localStorage.getItem('isAuthenticated');
-                if (savedUser && savedAuth === 'true') {
-                    const parsedUser = JSON.parse(savedUser);
-                    setUser(parsedUser);
-                    setIsAuthenticated(true);
+                const token = localStorage.getItem('token');
+
+                if (token && savedUser && savedAuth === 'true') {
+                    try {
+                        const parsedUser = JSON.parse(savedUser);
+                        setUser(parsedUser);
+                        setIsAuthenticated(true);
+                    } catch (e) {
+                        console.warn('[AuthContext] Stale user data in localStorage');
+                    }
+                }
+
+                // 2. Always validate with server if token exists
+                if (token) {
+                    await fetchProfile();
+                } else {
+                    // No token, definitely not authenticated
+                    setIsAuthenticated(false);
+                    setUser(null);
+                    setLoading(false);
                 }
             } catch (err) {
-                console.warn('Failed to parse saved user:', err);
+                console.error('[AuthContext] Initialization failed:', err);
+                setLoading(false);
             }
-
-            // 2. Refresh from server for absolute truth
-            await fetchProfile();
         };
 
         initAuth();
@@ -68,17 +83,20 @@ export const AuthProvider = ({ children }) => {
         } catch (error) {
             console.error('[AuthContext] Failed to fetch profile:', error);
 
-            // Clear stale state if it's an authentication error
-            if (error.data?.status === 401 || error.message.includes('401')) {
-                console.warn('[AuthContext] Session expired. Clearing state.');
+            // Clear state ONLY on explicit 401/403 (unauthorized)
+            const isAuthError = error.data?.status === 401 ||
+                error.message?.includes('401') ||
+                error.data?.status === 403;
+
+            if (isAuthError) {
+                console.warn('[AuthContext] Session invalid. Clearing state.');
                 localStorage.removeItem('token');
                 localStorage.removeItem('user');
                 localStorage.removeItem('isAuthenticated');
                 setUser(null);
                 setIsAuthenticated(false);
             }
-            // If it's a network error, we keep the stale state from initAuth to allow offline/slow access
-            // but we MUST ensure loading is eventually false
+            // For network errors, we might keep the stale user from localStorage
         } finally {
             setLoading(false);
         }
