@@ -32,7 +32,7 @@ const getLatestUpdates = async (req, res) => {
                 orderBy: { created_at: 'desc' }
             }),
             prisma.club_surveys.findFirst({
-                select: { id: true, title: true, description: true, type: true, created_at: true },
+                select: { id: true, title: true, description: true, created_at: true },
                 orderBy: { created_at: 'desc' }
             }),
             prisma.news.findFirst({
@@ -54,7 +54,7 @@ const getLatestUpdates = async (req, res) => {
         if (latestSurvey) {
             latestUpdates.push({
                 ...latestSurvey,
-                type_tag: latestSurvey.type,
+                type_tag: 'استطلاع',
                 type: 'survey'
             });
         }
