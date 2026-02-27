@@ -11,10 +11,11 @@ echo -e "${BLUE}=======================================${NC}"
 
 cd backend || { echo -e "${RED}❌ Folder 'backend' not found!${NC}"; exit 1; }
 
-# 1. إعداد رابط قاعدة البيانات
-echo -e "${GREEN}[1/3] Setting up Database URL...${NC}"
+# 1. إعداد روابط قاعدة البيانات (العادي والمباشر)
+echo -e "${GREEN}[1/3] Setting up Database URLs...${NC}"
 cat <<EOF > .env
-DATABASE_URL="postgresql://postgres:TUCC1447%40tucc2026@db.gyqhonidckxzwtjpofic.supabase.co:5432/postgres"
+DATABASE_URL="postgresql://postgres.gyqhonidckxzwtjpofic:TUCC1447%40tucc2026@aws-0-ap-northeast-1.pooler.supabase.com:6543/postgres?pgbouncer=true"
+DIRECT_URL="postgresql://postgres:TUCC1447%40tucc2026@db.gyqhonidckxzwtjpofic.supabase.co:5432/postgres"
 EOF
 
 # 2. بناء الجداول والمزامنة
@@ -25,7 +26,7 @@ npx prisma db push || { echo -e "${RED}❌ Error pushing schema! Aborting.${NC}"
 echo -e "${GREEN}[3/3] Committing and Pushing to GitHub...${NC}"
 cd ..
 git add .
-git commit -m "Final Clean Deploy"
+git commit -m "Fix database URLs and add DIRECT_URL"
 git push origin main
 
 echo -e "${GREEN}🎉 All tasks completed successfully! 🎉${NC}"
