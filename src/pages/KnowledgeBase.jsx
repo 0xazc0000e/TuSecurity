@@ -343,7 +343,7 @@ export default function KnowledgeBase() {
     const [enrollments, setEnrollments] = useState([]);
     const [showEditorModal, setShowEditorModal] = useState(false);
     const { user, apiCall } = useAuth();
-    const isEditor = user?.role === 'admin' || user?.role === 'editor';
+    const isEditor = user?.role?.toUpperCase() === 'ADMIN' || user?.role?.toUpperCase() === 'EDITOR' || user?.role?.toUpperCase() === 'SUPER_ADMIN' || user?.role?.toUpperCase() === 'MANAGER';
 
     useEffect(() => {
         setIsLoading(true);

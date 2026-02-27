@@ -29,16 +29,40 @@ export default function AdminAdvanced() {
 
     // Security Check
     useEffect(() => {
-        if (user && user.role !== 'admin' && user.role !== 'editor' && user.role !== 'manager') navigate('/dashboard');
+        if (!user) return;
+        const role = user.role?.toUpperCase() || '';
+        const email = user.email?.toLowerCase() || '';
+
+        // Allowed if role level >= EDITOR (2) or if it's the SUPER_ADMIN email
+        const ROLE_LEVELS = { 'STUDENT': 1, 'EDITOR': 2, 'MANAGER': 3, 'ADMIN': 4, 'SUPER_ADMIN': 5 };
+        const userLevel = ROLE_LEVELS[role] || 0;
+
+        if (userLevel < 2 && email !== 'az.jo.fm@gmail.com') {
+            navigate('/');
+        }
     }, [user, navigate]);
 
     // Fetch stats on mount
     useEffect(() => {
-        if (user && (user.role === 'admin' || user.role === 'editor' || user.role === 'manager')) fetchDashboardData();
+        if (user) {
+            const role = user.role?.toUpperCase() || '';
+            const email = user.email?.toLowerCase() || '';
+            const ROLE_LEVELS = { 'STUDENT': 1, 'EDITOR': 2, 'MANAGER': 3, 'ADMIN': 4, 'SUPER_ADMIN': 5 };
+            const userLevel = ROLE_LEVELS[role] || 0;
+
+            if (userLevel >= 2 || email === 'az.jo.fm@gmail.com') {
+                fetchDashboardData();
+            }
+        }
     }, [user]);
 
     const fetchDashboardData = async () => {
-        try { const data = await adminAPI.getStats(); setStats(data); } catch (err) { console.error('Failed to fetch stats:', err); }
+        try {
+            const data = await adminAPI.getStats();
+            setStats(data);
+        } catch (err) {
+            console.error('Failed to fetch stats:', err);
+        }
     };
 
     // Menu Configuration

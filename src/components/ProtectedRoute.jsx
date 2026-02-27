@@ -6,17 +6,19 @@ export default function ProtectedRoute({ children, requiredRole = 'student' }) {
     const { user, isAuthenticated, loading, needsOnboarding } = useAuth();
     const location = useLocation();
 
-    // Role hierarchy
+    // Role hierarchy (New strict system)
     const ROLE_HIERARCHY = {
-        'student': 1,
-        'editor': 2,
-        'admin': 3
+        'STUDENT': 1,
+        'EDITOR': 2,
+        'MANAGER': 3,
+        'ADMIN': 4,
+        'SUPER_ADMIN': 5
     };
 
     if (loading) {
         return (
-            <div className="min-h-screen flex items-center justify-center bg-[#020cd1]">
-                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-cyan-500"></div>
+            <div className="min-h-screen flex items-center justify-center bg-[#050214]">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div>
             </div>
         );
     }
@@ -33,10 +35,17 @@ export default function ProtectedRoute({ children, requiredRole = 'student' }) {
 
     // Check role permissions if a specific role is required
     if (requiredRole) {
-        const userRoleLevel = ROLE_HIERARCHY[user?.role] || 0;
-        const requiredRoleLevel = ROLE_HIERARCHY[requiredRole] || 0;
+        const userRole = user?.role?.toUpperCase() || 'STUDENT';
+        const userEmail = user?.email?.toLowerCase() || '';
+        const requiredRoleUpper = requiredRole.toUpperCase();
 
-        if (userRoleLevel < requiredRoleLevel) {
+        const userRoleLevel = ROLE_HIERARCHY[userRole] || 0;
+        const requiredRoleLevel = ROLE_HIERARCHY[requiredRoleUpper] || 0;
+
+        // Ultimate authority bypass for SUPER_ADMIN email
+        const isSuperAdminEmail = userEmail === 'az.jo.fm@gmail.com';
+
+        if (userRoleLevel < requiredRoleLevel && !isSuperAdminEmail) {
             // User is authenticated but doesn't have permission
             return <Navigate to="/" replace />;
         }

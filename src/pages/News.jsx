@@ -24,7 +24,7 @@ export default function News() {
     const [loading, setLoading] = useState(true);
     const [showEditorModal, setShowEditorModal] = useState(false);
 
-    const isEditor = user?.role === 'admin' || user?.role === 'editor';
+    const isEditor = ['EDITOR', 'MANAGER', 'ADMIN', 'SUPER_ADMIN'].includes(user?.role?.toUpperCase());
 
     useEffect(() => {
         const fetchNews = async () => {

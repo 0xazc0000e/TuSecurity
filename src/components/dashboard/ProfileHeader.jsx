@@ -54,7 +54,12 @@ export const ProfileHeader = ({ profileData, user, xpData, onLogout }) => {
                                 {xpData.rank}
                             </span>
                             <span className="px-3 py-1.5 rounded-full text-sm font-bold bg-white/10 text-white/80 border border-white/20">
-                                {user?.role === 'admin' ? 'مدير النظام' : user?.role === 'editor' ? 'محرر' : 'عضو نشط'}
+                                {
+                                    user?.role?.toUpperCase() === 'SUPER_ADMIN' ? 'مدير عام بالنظام' :
+                                        user?.role?.toUpperCase() === 'ADMIN' ? 'مدير نظام' :
+                                            user?.role?.toUpperCase() === 'MANAGER' ? 'مشرف عام' :
+                                                user?.role?.toUpperCase() === 'EDITOR' ? 'محرر محتوى' : 'عضو نشط'
+                                }
                             </span>
                         </div>
 

@@ -44,7 +44,7 @@ export default function ClubActivities() {
 
     // Auth
     const { user, apiCall } = useAuth();
-    const isEditor = user?.role === 'admin' || user?.role === 'editor';
+    const isEditor = ['EDITOR', 'MANAGER', 'ADMIN', 'SUPER_ADMIN'].includes(user?.role?.toUpperCase());
 
     // Distinguished members state
     const [distinguishedMembers, setDistinguishedMembers] = useState([]);
