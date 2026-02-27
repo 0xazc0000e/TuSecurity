@@ -8,22 +8,18 @@ import {
     Heart, Bookmark, Share2, Plus
 } from 'lucide-react';
 import { lmsAPI } from '../services/api';
-// apiCall removed because we will use useAuth for apiCall and user
+import { useAuth, apiCall, API_BASE_URL } from '../context/AuthContext';
 import axios from 'axios';
 import LessonViewer from '../components/LessonViewer';
 import ArticleViewer from '../components/ArticleViewer';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import MarkdownEditorModal from '../components/ui/MarkdownEditorModal';
-import { useAuth } from '../context/AuthContext';
 
 const ICON_MAP = {
     'Shield': Shield, 'Target': Target, 'Terminal': Terminal,
     'Cpu': Terminal, 'Server': Terminal
 };
-
-
-import { useAuth, API_BASE_URL } from '../context/AuthContext';
 
 const MEDIA_URL = API_BASE_URL.replace(/\/api\/?$/, '');
 
@@ -142,6 +138,7 @@ function CourseCard({ course }) {
 
 // ─── Article Card ─────────────────────────────────────────
 function ArticleCard({ article, onClick }) {
+    const { apiCall } = useAuth();
     const [liked, setLiked] = useState(false);
     const [saved, setSaved] = useState(false);
     const [loading, setLoading] = useState(false);
