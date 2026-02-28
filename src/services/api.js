@@ -1,6 +1,6 @@
 // API Service Layer
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://tusecurity.onrender.com';
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://tusecurity.onrender.com';
 
 // Generic API call helper
 export async function apiCall(endpoint, options = {}, token = null) {

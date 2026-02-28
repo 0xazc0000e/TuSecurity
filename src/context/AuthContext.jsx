@@ -1,4 +1,8 @@
-import { apiCall } from '../services/api';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { apiCall, API_BASE_URL } from '../services/api';
+
+// Re-export for backward compatibility with components importing from AuthContext
+export { apiCall, API_BASE_URL };
 
 // Create Auth Context
 const AuthContext = createContext();
