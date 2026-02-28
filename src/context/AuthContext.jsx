@@ -126,6 +126,19 @@ export const AuthProvider = ({ children }) => {
             setIsAuthenticated(true);
             return { success: true, user: normalizedUser };
         } catch (error) {
+            // Check for connection error (Render cold start)
+            const isConnectionError = error.message?.includes('الاتصال بالخادم') ||
+                error.message?.includes('fetch') ||
+                error.name === 'TypeError';
+
+            if (isConnectionError) {
+                return {
+                    success: false,
+                    isColdStart: true,
+                    error: 'السيرفر قيد التشغيل حالياً (يستغرق هذا حوالي 50 ثانية في الخطة المجانية). يرجى الانتظار لحظة والمحاولة مرة أخرى.'
+                };
+            }
+
             // Check for verification requirement in error data
             if (error.data && error.data.requiresVerification) {
                 return {

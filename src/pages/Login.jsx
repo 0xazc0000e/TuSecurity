@@ -64,7 +64,10 @@ export default function Login() {
                     </div>
 
                     {error && (
-                        <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-3 text-red-400">
+                        <div className={`mb-6 p-4 rounded-xl flex items-center gap-3 ${error.includes('السيرفر قيد التشغيل')
+                                ? 'bg-amber-500/10 border border-amber-500/20 text-amber-400'
+                                : 'bg-red-500/10 border border-red-500/20 text-red-400'
+                            }`}>
                             <AlertCircle size={20} />
                             <span>{error}</span>
                         </div>
