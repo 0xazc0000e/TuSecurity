@@ -37,11 +37,15 @@ export default function Profile() {
     // Fetch comprehensive profile data including XP from all sources
     const fetchProfileData = useCallback(async () => {
         try {
-            setLoading(true);
+            if (!profileData) {
+                setLoading(true);
+            }
 
             // Fetch main profile
             const profile = await apiCall('/auth/profile');
-            setProfileData(profile);
+            if (!profileData) {
+                setProfileData(profile);
+            }
 
             // Fetch comprehensive XP data from all sources
             const xpStats = await apiCall('/user/xp-stats').catch(() => ({

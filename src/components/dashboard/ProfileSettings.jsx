@@ -27,13 +27,20 @@ export const ProfileSettings = ({ user, onUpdate }) => {
         newPassword: '',
         confirmPassword: '',
     });
-    const [settings, setSettings] = useState({
-        darkMode: true,
-        notifications: true,
-        emailUpdates: true,
-        publicProfile: false,
-        twoFactor: false,
-        language: 'ar'
+    const [settings, setSettings] = useState(() => {
+        // Load initial settings from localStorage or defaults
+        const savedSettings = localStorage.getItem('userSettings');
+        if (savedSettings) {
+            return JSON.parse(savedSettings);
+        }
+        return {
+            darkMode: true,
+            notifications: true,
+            emailUpdates: true,
+            publicProfile: false,
+            twoFactor: false,
+            language: 'ar'
+        };
     });
     const [avatarFile, setAvatarFile] = useState(null);
     const [preview, setPreview] = useState(user?.avatar);
@@ -47,7 +54,24 @@ export const ProfileSettings = ({ user, onUpdate }) => {
     };
 
     const handleSettingChange = (key, value) => {
-        setSettings(prev => ({ ...prev, [key]: value }));
+        const newSettings = { ...settings, [key]: value };
+        setSettings(newSettings);
+
+        // Save to localStorage
+        localStorage.setItem('userSettings', JSON.stringify(newSettings));
+
+        // Apply immediate side-effects
+        if (key === 'darkMode') {
+            if (value) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        } else if (key === 'language') {
+            document.documentElement.dir = value === 'ar' ? 'rtl' : 'ltr';
+            document.documentElement.lang = value;
+        }
+
         setStatus(`✅ تم ${value ? 'تفعيل' : 'تعطيل'} ${getSettingLabel(key)}`);
         setTimeout(() => setStatus(''), 2000);
     };

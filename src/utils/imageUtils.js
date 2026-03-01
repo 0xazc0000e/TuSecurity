@@ -15,7 +15,7 @@ export const getApiImageUrl = (path) => {
 
     // Get API base URL from env
     // Default to localhost:5000 if not set
-    let baseUrl = import.meta.env.VITE_API_URL || 'https://tusecurity.onrender.com/api';
+    let baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://tusecurity.onrender.com/api';
 
     // We need the server root (https://tusecurity.onrender.com), not the API root (https://tusecurity.onrender.com/api)
     // because static files are served from /uploads, not /api/uploads
