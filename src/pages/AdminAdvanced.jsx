@@ -4,7 +4,7 @@ import {
     Users, BookOpen, Shield, Activity, Settings, LogOut,
     Plus, Search, Trash2, Edit, Save, X, ChevronRight,
     Terminal, Layout, FileText, Play, Image, LayoutDashboard, ShieldAlert, Database,
-    TrendingUp, Folder, Video, FileUp, Monitor, Cpu, Trash, Calendar, Newspaper
+    TrendingUp, Folder, Video, FileUp, Monitor, Cpu, Trash, Calendar, Newspaper, MessageSquare
 } from 'lucide-react';
 import { MatrixBackground } from '../components/ui/MatrixBackground';
 import { useNavigate } from 'react-router-dom';

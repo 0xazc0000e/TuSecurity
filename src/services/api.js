@@ -314,6 +314,19 @@ export const eventsAPI = {
     getRegistrationsSummary: () => apiCall('/events/admin/registrations-summary')
 };
 
+// Distinguished Members API
+export const distinguishedAPI = {
+    getMembers: () => apiCall('/distinguished'),
+    addMember: (data) => apiCall('/distinguished', {
+        method: 'POST',
+        body: JSON.stringify(data)
+    }),
+    deleteMember: (id) => apiCall(`/distinguished/${id}`, {
+        method: 'DELETE'
+    }),
+    getMessages: (id) => apiCall(`/distinguished/${id}/messages`)
+};
+
 // Reports API
 export const reportsAPI = {
     submitReport: (data) => apiCall('/reports', {
