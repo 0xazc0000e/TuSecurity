@@ -6,7 +6,9 @@
  * @returns {string} - The full URL (e.g., 'https://tusecurity.onrender.com/uploads/avatar.jpg')
  */
 export const getApiImageUrl = (path) => {
-    if (!path) return '/default-avatar.png';
+    if (!path || path === '/default-avatar.png') {
+        return 'https://ui-avatars.com/api/?name=User&background=7112AF&color=fff';
+    }
 
     // Check if it's already a full URL or data URI
     if (path.startsWith('http') || path.startsWith('data:')) {

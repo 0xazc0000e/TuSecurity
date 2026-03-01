@@ -35,17 +35,14 @@ export default function Profile() {
     });
 
     // Fetch comprehensive profile data including XP from all sources
-    const fetchProfileData = useCallback(async () => {
+    const fetchProfileData = useCallback(async (isBackgroundSync = false) => {
         try {
-            if (!profileData) {
+            if (!isBackgroundSync) {
                 setLoading(true);
             }
 
             // Fetch main profile
             const profile = await apiCall('/auth/profile');
-            if (!profileData) {
-                setProfileData(profile);
-            }
 
             // Fetch comprehensive XP data from all sources
             const xpStats = await apiCall('/user/xp-stats').catch(() => ({
@@ -72,12 +69,12 @@ export default function Profile() {
                 likes: 0
             }));
 
-            setProfileData({ ...profile, events });
-
             // Calculate rank based on total XP
             const totalXP = xpStats.totalXP || profile.total_xp || 0;
             const rank = getRank(totalXP);
 
+            // Update all state together
+            setProfileData({ ...profile, events });
             setXpData({
                 totalXP,
                 weeklyXP: xpStats.weeklyXP || 0,
@@ -96,21 +93,23 @@ export default function Profile() {
         } catch (error) {
             console.error('Failed to load profile data:', error);
         } finally {
-            setLoading(false);
+            if (!isBackgroundSync) {
+                setLoading(false);
+            }
         }
     }, []);
 
     useEffect(() => {
-        fetchProfileData();
+        fetchProfileData(false);
 
         // Set up interval to refresh data every 30 seconds
-        const interval = setInterval(fetchProfileData, 30000);
+        const interval = setInterval(() => fetchProfileData(true), 30000);
         return () => clearInterval(interval);
     }, [fetchProfileData]);
 
     const handleProfileUpdate = (updatedUser) => {
         setProfileData(prev => ({ ...prev, ...updatedUser }));
-        fetchProfileData();
+        fetchProfileData(true);
     };
 
     const handleLogout = () => {
@@ -213,14 +212,14 @@ export default function Profile() {
                                 {activeTab === 'learning' && (
                                     <MyLearning
                                         enrollments={profileData?.enrollments}
-                                        onProgressUpdate={fetchProfileData}
+                                        onProgressUpdate={() => fetchProfileData(true)}
                                     />
                                 )}
                                 {activeTab === 'saved' && (
                                     <SavedItems
                                         likes={profileData?.likes}
                                         bookmarks={profileData?.bookmarks}
-                                        onUpdate={fetchProfileData}
+                                        onUpdate={() => fetchProfileData(true)}
                                     />
                                 )}
                                 {activeTab === 'events' && (
